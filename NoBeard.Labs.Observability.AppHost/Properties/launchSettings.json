@@ -14,6 +14,20 @@
         "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22248"
       }
     },
+    "https-cloud": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:17086;http://localhost:15062",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "GrafanaCloud__Enabled": "true",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21012",
+        "ASPIRE_DASHBOARD_MCP_ENDPOINT_URL": "https://localhost:23299",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22248"
+      }
+    },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,

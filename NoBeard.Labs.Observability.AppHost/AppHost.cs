@@ -22,10 +22,11 @@ var lgtm = builder.AddContainer("grafana", "grafana/otel-lgtm", "0.38.0")
     .WithUrlForEndpoint("otlp-http", u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
 
 // ---------------------------------------------------------------------------------------------------------------
-// Observability backend #2 (optional): Grafana Cloud. Enabled as soon as the parameters below have values
-// (AppHost -> Manage User Secrets, see README). Alloy then fans out to LGTM *and* Grafana Cloud.
+// Observability backend #2 (optional): Grafana Cloud. Switched on by the "https-cloud" launch profile
+// (GrafanaCloud__Enabled=true); credentials come from user secrets (see README). Alloy then fans out to LGTM
+// *and* Grafana Cloud. Pick the plain "https" profile to fall back to local-only without touching the secrets.
 // ---------------------------------------------------------------------------------------------------------------
-var grafanaCloudEnabled = !string.IsNullOrWhiteSpace(builder.Configuration["Parameters:grafana-cloud-otlp-endpoint"]);
+var grafanaCloudEnabled = bool.TryParse(builder.Configuration["GrafanaCloud:Enabled"], out var cloud) && cloud;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Grafana Alloy: the OTLP collector between the apps and the backends (batching, PII redaction, fan-out).
@@ -72,7 +73,8 @@ if (grafanaCloudEnabled)
         .WithEnvironment("Prometheus__Username", prometheusUser)
         .WithEnvironment("Prometheus__Password", apiToken)
         .WithEnvironment("Grafana__Url", grafanaUrl)
-        .WithEnvironment("Grafana__TempoDatasourceUid", "grafanacloud-traces");
+        // Default UID of the Tempo data source in a Grafana Cloud stack; override in user secrets if yours differs.
+        .WithEnvironment("Grafana__TempoDatasourceUid", builder.Configuration["GrafanaCloud:TempoDatasourceUid"] ?? "grafanacloud-traces");
 }
 else
 {

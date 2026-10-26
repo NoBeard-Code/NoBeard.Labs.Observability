@@ -41,33 +41,77 @@ Aspire dashboard                     Grafana Alloy ── redact · batch ──
 
 All Docker containers and volumes use the `nobeard-demo-` prefix so they don't collide with other local Docker resources.
 
-## Switch on Grafana Cloud
+## Grafana Cloud
 
-Right-click the AppHost → **Manage User Secrets** and add (values from *grafana.com → your stack*):
+Local vs. cloud is a **launch profile** — pick it in Visual Studio's start-button dropdown:
+
+| Profile | What happens |
+|---|---|
+| `https` | Local only: Alloy → otel-lgtm; *Live insights* reads local Prometheus. Works offline. |
+| `https-cloud` | Alloy fans out to otel-lgtm **and** Grafana Cloud ([`cloud.alloy`](grafana/alloy/cloud.alloy)); *Live insights* reads **Grafana Cloud Metrics (Mimir)** — same code, only `BaseUrl` + basic auth differ. |
+
+### 1. Collect the values (grafana.com → *My Account* → your stack)
+
+| User secret | Where to find it |
+|---|---|
+| `grafana-cloud-grafana-url` | Your stack URL, e.g. `https://<stack>.grafana.net` |
+| `grafana-cloud-otlp-endpoint` | **OpenTelemetry** tile → *Configure* → OTLP endpoint, e.g. `https://otlp-gateway-prod-eu-west-2.grafana.net/otlp` |
+| `grafana-cloud-instance-id` | Same OpenTelemetry page → *Instance ID* (a number) |
+| `grafana-cloud-prometheus-url` | **Prometheus** tile → *Details* → the remote-write URL **without** `/push`, e.g. `https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom` |
+| `grafana-cloud-prometheus-user` | Same Prometheus page → *Username / Instance ID* (a different number than the OTLP one!) |
+| `grafana-cloud-api-token` | An **access policy token** — see below |
+
+**Token:** grafana.com → *Security* → **Access Policies** → *Create access policy* for your stack with scopes
+`metrics:read`, `metrics:write`, `logs:write`, `traces:write` → *Add token* (set an expiry *after* your talk) → copy it
+(shown once). ⚠️ The token the OpenTelemetry tile generates has **write scopes only** — Alloy would work, but
+*Live insights* would get `401` because it also needs `metrics:read`.
+
+### 2. Store them as user secrets (never in appsettings / git)
+
+Right-click the AppHost → **Manage User Secrets**:
 
 ```json
 {
   "Parameters": {
-    "grafana-cloud-otlp-endpoint": "https://otlp-gateway-prod-eu-west-2.grafana.net/otlp",
-    "grafana-cloud-instance-id": "<stack instance ID — OpenTelemetry tile>",
-    "grafana-cloud-api-token": "<access policy token: metrics:read, metrics:write, logs:write, traces:write>",
-    "grafana-cloud-prometheus-url": "https://prometheus-prod-XX-prod-eu-west-2.grafana.net/api/prom",
-    "grafana-cloud-prometheus-user": "<Prometheus instance ID — Prometheus tile>",
-    "grafana-cloud-grafana-url": "https://<your-stack>.grafana.net"
+    "grafana-cloud-grafana-url": "https://<stack>.grafana.net",
+    "grafana-cloud-otlp-endpoint": "https://otlp-gateway-prod-<region>.grafana.net/otlp",
+    "grafana-cloud-instance-id": "<OTLP instance ID>",
+    "grafana-cloud-prometheus-url": "https://prometheus-prod-<nn>-prod-<region>.grafana.net/api/prom",
+    "grafana-cloud-prometheus-user": "<Prometheus instance ID>",
+    "grafana-cloud-api-token": "<access policy token>"
   }
 }
 ```
 
-Restart the AppHost. Now:
+The Aspire dashboard's **Parameters** tab shows the values in use (token masked) — handy to spot a leftover
+placeholder. Optional: `"GrafanaCloud": { "TempoDatasourceUid": "…" }` if your stack's Tempo data source UID isn't
+`grafanacloud-traces` (check *Connections → Data sources → Tempo*, the UID is in the URL); it's used for the
+trace links on the Shop page.
 
-* Alloy loads [`cloud.alloy`](grafana/alloy/cloud.alloy) and fans out to **both** local LGTM and Grafana Cloud
-  (plus `host_info` for Application Observability).
-* The *Live insights* page reads from **Grafana Cloud Metrics (Mimir)** instead of local Prometheus — same code, only
-  `BaseUrl` + basic auth differ.
-* Import [`grafana/dashboards/nobeard-o11y-demo.json`](grafana/dashboards/nobeard-o11y-demo.json) into the cloud stack;
-  it uses data-source variables so it works there unchanged.
+### 3. Run and verify
 
-Remove the `grafana-cloud-otlp-endpoint` secret to go back to local-only (e.g. when the venue Wi-Fi dies).
+1. Start with the **`https-cloud`** profile. *Live insights* shows the badge **Grafana Cloud Metrics**.
+2. Grafana Cloud → *Explore*: Prometheus `demo_orders_placed_total` · Loki `{service_name="webfrontend"}` ·
+   Tempo → Search → service `webfrontend`. Data arrives within ~30 s.
+3. *Dashboards → New → Import* → upload [`grafana/dashboards/nobeard-o11y-demo.json`](grafana/dashboards/nobeard-o11y-demo.json).
+   At the top pick the `grafanacloud-<stack>-prom` / `-logs` / `-traces` data sources and **save** the dashboard so
+   they stick.
+4. *Observability → Application* (Application Observability): enable it once; `webfrontend` shows up after a few
+   minutes (traces + `host_info` from Alloy).
+
+Cost: the app produces ≈ 250–400 active series at a 10 s interval — far inside the free tier (10k series,
+50 GB logs, 50 GB traces, 14-day retention).
+
+### 4. Make it stage-proof
+
+* **Warm it up**: run `https-cloud` with traffic for 30+ min the day before — dashboards and App Observability have
+  history, and you've seen it work on that network.
+* **Log in** to Grafana Cloud in the browser you'll present from; open the dashboard, Explore and App Observability in
+  tabs beforehand (the Shop's trace links open there too).
+* **Plan B**: Wi-Fi dies → stop, switch the profile to `https`, F5 — everything works offline against otel-lgtm
+  (images are already pulled). Only outbound HTTPS (443) is needed for the cloud path.
+* **Token expiry**: double-check the access policy token is still valid on the day.
+* Optional: tether to your phone instead of venue Wi-Fi for the cloud part.
 
 ## Where to look in the code (talk track)
 
@@ -106,7 +150,8 @@ Remove the `grafana-cloud-otlp-endpoint` secret to go back to local-only (e.g. w
    the Blazor UI, the stat panels in Grafana; click an **exemplar** on the p95 panel → the slow trace → its error log.
    * *Shop → Burst ×20 as fabrikam*: all 20 orders share **one trace** — its root is the .NET 10 Blazor
      `Event onclick` span. Click the trace id → Grafana Tempo.
-6. **Cloud** — same story in Grafana Cloud (pre-recorded/pre-enabled), Application Observability, cost note: 10 s
+6. **Cloud** (`https-cloud` profile, warmed up beforehand) — same dashboard in Grafana Cloud, *Live insights* badge now
+   says *Grafana Cloud Metrics*, Application Observability service view, cost note: 10 s
    export interval and low-cardinality labels (tenant yes, order id no).
 
 ## Troubleshooting
