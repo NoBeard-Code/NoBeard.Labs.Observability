@@ -50,18 +50,22 @@ Local vs. cloud is a **launch profile** — pick it in Visual Studio's start-but
 | `https` | Local only: Alloy → otel-lgtm; *Live insights* reads local Prometheus. Works offline. |
 | `https-cloud` | Alloy fans out to otel-lgtm **and** Grafana Cloud ([`cloud.alloy`](grafana/alloy/cloud.alloy)); *Live insights* reads **Grafana Cloud Metrics (Mimir)** — same code, only `BaseUrl` + basic auth differ. |
 
-### 1. Collect the values (grafana.com → *My Account* → your stack)
+### 1. Collect the values
 
-| User secret | Where to find it |
-|---|---|
-| `grafana-cloud-grafana-url` | Your stack URL, e.g. `https://<stack>.grafana.net` |
-| `grafana-cloud-otlp-endpoint` | **OpenTelemetry** tile → *Configure* → OTLP endpoint, e.g. `https://otlp-gateway-prod-eu-west-2.grafana.net/otlp` |
-| `grafana-cloud-instance-id` | Same OpenTelemetry page → *Instance ID* (a number) |
-| `grafana-cloud-prometheus-url` | **Prometheus** tile → *Details* → the remote-write URL **without** `/push`, e.g. `https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom` |
-| `grafana-cloud-prometheus-user` | Same Prometheus page → *Username / Instance ID* (a different number than the OTLP one!) |
-| `grafana-cloud-api-token` | An **access policy token** — see below |
+These live in the **Cloud Portal** — `https://grafana.com/orgs/<your-org>` (grafana.com → sign in → *My Account*) —
+**not** in your Grafana instance (`https://<stack>.grafana.net`). In the portal, select your stack in the left
+menu: the stack page shows tiles for Grafana, Prometheus, Loki, Tempo, OpenTelemetry, ….
 
-**Token:** grafana.com → *Security* → **Access Policies** → *Create access policy* for your stack with scopes
+| User secret | Cloud Portal (stack page) | Alternative inside Grafana (`<stack>.grafana.net`) |
+|---|---|---|
+| `grafana-cloud-grafana-url` | Grafana tile → URL, e.g. `https://<stack>.grafana.net` | the address in your browser |
+| `grafana-cloud-otlp-endpoint` | **OpenTelemetry** tile → *Configure* → endpoint, e.g. `https://otlp-gateway-prod-eu-west-2.grafana.net/otlp` | *Connections* → *Add new connection* → search **OpenTelemetry** → *OpenTelemetry (OTLP)* |
+| `grafana-cloud-instance-id` | Same OpenTelemetry page → *Instance ID* (a number; also the user in its `Authorization: Basic` header) | same connection page |
+| `grafana-cloud-prometheus-url` | **Prometheus** tile → *Details* → **query endpoint**, e.g. `https://prometheus-prod-24-prod-eu-west-2.grafana.net/api/prom` | *Connections* → *Data sources* → `grafanacloud-<stack>-prom` → *Connection* URL |
+| `grafana-cloud-prometheus-user` | Same Prometheus details page → *User* / instance ID (a **different** number than the OTLP one) | same data source → *Authentication* → *User* |
+| `grafana-cloud-api-token` | An **access policy token** — see below | *Administration* → *Users and access* → *Cloud access policies* |
+
+**Token:** Cloud Portal → *Security* → **Access Policies** → *Create access policy* for your stack with scopes
 `metrics:read`, `metrics:write`, `logs:write`, `traces:write` → *Add token* (set an expiry *after* your talk) → copy it
 (shown once). ⚠️ The token the OpenTelemetry tile generates has **write scopes only** — Alloy would work, but
 *Live insights* would get `401` because it also needs `metrics:read`.
