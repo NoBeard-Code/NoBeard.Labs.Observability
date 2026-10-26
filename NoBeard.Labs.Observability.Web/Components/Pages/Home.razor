@@ -1,0 +1,55 @@
+﻿@page "/"
+@inject PrometheusClient Prometheus
+@inject IOptions<GrafanaOptions> Grafana
+
+<PageTitle>Overview</PageTitle>
+
+<h1>.NET observability end-to-end</h1>
+<p class="lead">Blazor Server → API → Redis, instrumented with OpenTelemetry via Aspire service defaults,
+    shipped through Grafana Alloy to Grafana (local LGTM and/or Grafana Cloud), and read back via the Prometheus API.</p>
+
+<pre class="arch">
+ ┌──────────────────┐   HTTP + W3C traceparent/baggage   ┌──────────────┐     ┌───────┐
+ │ webfrontend      │ ─────────────────────────────────▶ │ apiservice   │ ──▶ │ Redis │
+ │ (Blazor Server)  │                                    │ (minimal API)│     └───────┘
+ └───────┬──────────┘                                    └──────┬───────┘
+         │ OTLP (logs · metrics · traces)                       │
+         ├────────────────────────┬─────────────────────────────┤
+         ▼                        ▼
+ ┌────────────────┐      ┌──────────────────┐   batch · redact PII   ┌───────────────────────────┐
+ │ Aspire         │      │ Grafana Alloy    │ ─────────────────────▶ │ Local LGTM (Grafana,       │
+ │ dashboard      │      │ (OTLP collector) │                        │ Prometheus, Loki, Tempo)   │
+ │ (dev loop)     │      └──────────────────┘ ─────────────────────▶ │ Grafana Cloud (optional)   │
+ └────────────────┘                                                  └─────────────┬─────────────┘
+                                                                                   │ Prometheus HTTP API
+                        "Live insights" page in this Blazor app  ◀──────────────────┘
+</pre>
+
+<div class="row g-3 mt-2">
+    <div class="col-md-4">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">1 · Shop</h5>
+            <p>Place orders as a tenant. Each order is one distributed trace across Blazor, the API and Redis.</p>
+            <a class="btn btn-primary" href="shop">Go shopping</a>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">2 · Live insights</h5>
+            <p>PromQL against <strong>@Prometheus.SourceName</strong>, pushed to the browser over the Blazor circuit.</p>
+            <a class="btn btn-primary" href="insights">Open insights</a>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">3 · Break things</h5>
+            <p>Inject failures or latency for one tenant and watch it light up in Grafana and the insights page.</p>
+            <a class="btn btn-outline-danger" href="control">Traffic &amp; chaos</a>
+        </div></div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(Grafana.Value.Url))
+{
+    <p class="mt-4">Grafana: <a href="@Grafana.Value.Url" target="_blank">@Grafana.Value.Url</a> — dashboard <em>“.NET O11y Demo”</em>.</p>
+}

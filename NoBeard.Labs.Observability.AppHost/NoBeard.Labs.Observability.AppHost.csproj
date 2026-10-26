@@ -1,0 +1,23 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.6.4">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>344ef495-fa9c-400d-94f3-53622fc8a141</UserSecretsId>
+    <!-- Visual Studio F5 uses the NuGet-based orchestrator (DCP + dashboard packages); the Aspire CLI bundle is optional. -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NoBeard.Labs.Observability.ApiService\NoBeard.Labs.Observability.ApiService.csproj" />
+    <ProjectReference Include="..\NoBeard.Labs.Observability.Web\NoBeard.Labs.Observability.Web.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Redis" Version="13.6.4" />
+  </ItemGroup>
+
+</Project>
+

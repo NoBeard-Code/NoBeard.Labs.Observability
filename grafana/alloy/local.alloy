@@ -1,0 +1,63 @@
+// =====================================================================================================
+// Grafana Alloy - LOCAL pipeline
+//   apps --OTLP--> [receiver] -> [redact PII] -> [batch] -> local LGTM (Grafana/Prometheus/Loki/Tempo)
+// Live view of this pipeline: Aspire dashboard -> "alloy" -> "Alloy pipeline" URL (Graph tab).
+// =====================================================================================================
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+otelcol.receiver.otlp "apps" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+
+  output {
+    metrics = [otelcol.processor.transform.redact.input]
+    logs    = [otelcol.processor.transform.redact.input]
+    traces  = [otelcol.processor.transform.redact.input]
+  }
+}
+
+// Production hygiene in the collector, not in every app: strip things that must never leave the cluster.
+otelcol.processor.transform "redact" {
+  error_mode = "ignore"
+
+  trace_statements {
+    context    = "span"
+    statements = [
+      `delete_key(attributes, "user.email")`,
+      `replace_pattern(attributes["url.query"], "token=[^&]+", "token=REDACTED")`,
+    ]
+  }
+
+  log_statements {
+    context    = "log"
+    statements = [
+      `delete_key(attributes, "user.email")`,
+    ]
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  output {
+    metrics = [otelcol.exporter.otlphttp.lgtm.input]
+    logs    = [otelcol.exporter.otlphttp.lgtm.input]
+    traces  = [otelcol.exporter.otlphttp.lgtm.input]
+  }
+}
+
+otelcol.exporter.otlphttp "lgtm" {
+  client {
+    // Injected by the Aspire AppHost (container-to-container address of the "grafana" resource)
+    endpoint = sys.env("LGTM_OTLP_ENDPOINT")
+    tls { insecure = true }
+  }
+}

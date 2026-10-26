@@ -1,0 +1,55 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.0.0
+MinimumVisualStudioVersion = 17.8.0.0
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NoBeard.Labs.Observability.AppHost", "NoBeard.Labs.Observability.AppHost\NoBeard.Labs.Observability.AppHost.csproj", "{B71E1394-6E81-4706-910B-F98C7F63A8A2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NoBeard.Labs.Observability.ServiceDefaults", "NoBeard.Labs.Observability.ServiceDefaults\NoBeard.Labs.Observability.ServiceDefaults.csproj", "{EA0B1563-993D-4373-BF4A-97E3E375E93D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NoBeard.Labs.Observability.ApiService", "NoBeard.Labs.Observability.ApiService\NoBeard.Labs.Observability.ApiService.csproj", "{293AA7E8-3150-4545-A60E-68E6CE0DF37E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NoBeard.Labs.Observability.Web", "NoBeard.Labs.Observability.Web\NoBeard.Labs.Observability.Web.csproj", "{27A0FF15-E392-4DC1-87E4-59B3F909BE64}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6F1C4A0E-2B7D-4E61-9A53-0D8E1B2C3A41}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "grafana", "grafana", "{8A2D5B1F-3C4E-4F70-8B62-1E9F2C3D4B52}"
+	ProjectSection(SolutionItems) = preProject
+		grafana\alloy\local.alloy = grafana\alloy\local.alloy
+		grafana\alloy\cloud.alloy = grafana\alloy\cloud.alloy
+		grafana\dashboards\nobeard-o11y-demo.json = grafana\dashboards\nobeard-o11y-demo.json
+		grafana\provisioning\demo-dashboards.yaml = grafana\provisioning\demo-dashboards.yaml
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B71E1394-6E81-4706-910B-F98C7F63A8A2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B71E1394-6E81-4706-910B-F98C7F63A8A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B71E1394-6E81-4706-910B-F98C7F63A8A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B71E1394-6E81-4706-910B-F98C7F63A8A2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EA0B1563-993D-4373-BF4A-97E3E375E93D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EA0B1563-993D-4373-BF4A-97E3E375E93D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EA0B1563-993D-4373-BF4A-97E3E375E93D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EA0B1563-993D-4373-BF4A-97E3E375E93D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{293AA7E8-3150-4545-A60E-68E6CE0DF37E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{293AA7E8-3150-4545-A60E-68E6CE0DF37E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{293AA7E8-3150-4545-A60E-68E6CE0DF37E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{293AA7E8-3150-4545-A60E-68E6CE0DF37E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{27A0FF15-E392-4DC1-87E4-59B3F909BE64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{27A0FF15-E392-4DC1-87E4-59B3F909BE64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{27A0FF15-E392-4DC1-87E4-59B3F909BE64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{27A0FF15-E392-4DC1-87E4-59B3F909BE64}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9BAABDA8-8B58-47E3-A973-BD7EC696DEA3}
+	EndGlobalSection
+EndGlobal

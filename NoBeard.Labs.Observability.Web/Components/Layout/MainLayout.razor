@@ -1,0 +1,47 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject TenantState Tenant
+@inject IOptions<GrafanaOptions> Grafana
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <label class="tenant-picker">
+                <span>Acting as tenant</span>
+                <select class="form-select form-select-sm" value="@Tenant.Current" @onchange="e => Tenant.Set(e.Value?.ToString() ?? string.Empty)">
+                    @foreach (var t in TenantTelemetry.KnownTenants)
+                    {
+                        <option value="@t">@t</option>
+                    }
+                </select>
+                <span class="tenant-dot" style="background:@TenantColors.For(Tenant.Current)"></span>
+            </label>
+            @if (!string.IsNullOrEmpty(Grafana.Value.Url))
+            {
+                <a href="@Grafana.Value.Url" target="_blank">Open Grafana ↗</a>
+            }
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div>
+
+@code {
+    protected override void OnInitialized() => Tenant.Changed += OnTenantChanged;
+
+    private void OnTenantChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Tenant.Changed -= OnTenantChanged;
+}

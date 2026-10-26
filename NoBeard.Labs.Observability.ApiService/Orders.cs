@@ -1,0 +1,155 @@
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+
+namespace NoBeard.Labs.Observability.ApiService;
+
+public record Product(string Id, string Name, decimal Price);
+public record OrderRequest(string ProductId, int Quantity);
+public record OrderConfirmation(string OrderId, string ProductName, int Quantity, decimal Total);
+public record OrderOutcome(OrderConfirmation? Order, string? Error);
+
+public static class Catalog
+{
+    public static readonly Product[] Products =
+    [
+        new("otel-hoodie", "OpenTelemetry Hoodie", 49.90m),
+        new("aspire-mug", "Aspire Coffee Mug", 14.50m),
+        new("grafana-socks", "Grafana Socks", 9.99m),
+        new("blazor-sticker", "Blazor Sticker Pack", 4.20m),
+        new("prom-tshirt", "PromQL T-Shirt", 24.00m),
+    ];
+
+    public static Product? Find(string id) => Products.FirstOrDefault(p => p.Id == id);
+}
+
+public static class ApiTelemetry
+{
+    public static readonly ActivitySource Source = new("NoBeard.Labs.Observability.Api");
+}
+
+/// <summary>
+/// Business metrics. Names follow OTel conventions and map to Prometheus like this:
+///   demo.orders.placed               -> demo_orders_placed_total
+///   demo.orders.revenue              -> demo_orders_revenue_total
+///   demo.orders.failed               -> demo_orders_failed_total
+///   demo.orders.processing.duration  -> demo_orders_processing_duration_seconds_bucket/_sum/_count
+/// tenant.id becomes the tenant_id label.
+/// </summary>
+public sealed class OrderMetrics
+{
+    public const string MeterName = "NoBeard.Labs.Observability.Orders";
+
+    private readonly Counter<long> _placed;
+    private readonly Counter<double> _revenue;
+    private readonly Counter<long> _failed;
+    private readonly Histogram<double> _duration;
+
+    public OrderMetrics(IMeterFactory meterFactory)
+    {
+        var meter = meterFactory.Create(MeterName);
+        _placed = meter.CreateCounter<long>("demo.orders.placed", "{order}", "Orders successfully placed");
+        _revenue = meter.CreateCounter<double>("demo.orders.revenue", "{EUR}", "Revenue of placed orders in EUR");
+        _failed = meter.CreateCounter<long>("demo.orders.failed", "{order}", "Orders that failed");
+        _duration = meter.CreateHistogram<double>("demo.orders.processing.duration", "s", "Time to process an order",
+            advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5] });
+    }
+
+    public void Placed(string tenant, Product product, int quantity, TimeSpan elapsed)
+    {
+        var tags = new TagList { { "tenant.id", tenant }, { "product.id", product.Id } };
+        _placed.Add(1, tags);
+        _revenue.Add((double)(product.Price * quantity), tags);
+        _duration.Record(elapsed.TotalSeconds, new TagList { { "tenant.id", tenant }, { "outcome", "success" } });
+    }
+
+    public void Failed(string tenant, string reason, TimeSpan elapsed)
+    {
+        _failed.Add(1, new TagList { { "tenant.id", tenant }, { "error.type", reason } });
+        _duration.Record(elapsed.TotalSeconds, new TagList { { "tenant.id", tenant }, { "outcome", "failure" } });
+    }
+}
+
+public record ChaosState(double FailureRate, int ExtraLatencyMs, string? Tenant);
+
+/// <summary>Runtime-switchable fault injection, optionally scoped to a single tenant (noisy-neighbour demo).</summary>
+public sealed class ChaosSettings
+{
+    private volatile ChaosState _state = new(0.02, 0, null);
+
+    public ChaosState Snapshot() => _state;
+    public void Apply(ChaosState state) => _state = state with { FailureRate = Math.Clamp(state.FailureRate, 0, 1) };
+
+    public bool AppliesTo(string tenant) => _state.Tenant is null || _state.Tenant == tenant;
+}
+
+public sealed class PaymentDeclinedException(string message) : Exception(message);
+
+public sealed class OrderProcessor(OrderMetrics metrics, ChaosSettings chaos, ILogger<OrderProcessor> logger)
+{
+    public async Task<OrderOutcome> PlaceOrderAsync(string tenant, OrderRequest request, CancellationToken ct)
+    {
+        var started = Stopwatch.GetTimestamp();
+        using var activity = ApiTelemetry.Source.StartActivity("Process order");
+        activity?.SetTag("order.product_id", request.ProductId);
+        activity?.SetTag("order.quantity", request.Quantity);
+
+        var product = Catalog.Find(request.ProductId);
+        if (product is null)
+        {
+            logger.LogWarning("Tenant {TenantId} ordered unknown product {ProductId}", tenant, request.ProductId);
+            activity?.SetStatus(ActivityStatusCode.Error, "unknown product");
+            return new(null, "unknown_product");
+        }
+
+        try
+        {
+            await ReserveInventoryAsync(product, request.Quantity, ct);
+            await ChargePaymentAsync(tenant, product.Price * request.Quantity, ct);
+
+            var order = new OrderConfirmation($"ORD-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
+                product.Name, request.Quantity, product.Price * request.Quantity);
+
+            activity?.SetTag("order.id", order.OrderId);
+            metrics.Placed(tenant, product, request.Quantity, Stopwatch.GetElapsedTime(started));
+            logger.LogInformation("Order {OrderId} placed for tenant {TenantId}: {Quantity} x {ProductName} = {OrderTotal} EUR",
+                order.OrderId, tenant, request.Quantity, product.Name, order.Total);
+
+            return new(order, null);
+        }
+        catch (PaymentDeclinedException ex)
+        {
+            activity?.AddException(ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            metrics.Failed(tenant, "payment_declined", Stopwatch.GetElapsedTime(started));
+            logger.LogError(ex, "Payment failed for tenant {TenantId} ({ProductName} x {Quantity})", tenant, product.Name, request.Quantity);
+            return new(null, "payment_declined");
+        }
+    }
+
+    private static async Task ReserveInventoryAsync(Product product, int quantity, CancellationToken ct)
+    {
+        using var activity = ApiTelemetry.Source.StartActivity("Reserve inventory");
+        activity?.SetTag("product.id", product.Id);
+        await Task.Delay(Random.Shared.Next(5, 40), ct);
+        activity?.AddEvent(new ActivityEvent("inventory.reserved", tags: new() { ["quantity"] = quantity }));
+    }
+
+    private async Task ChargePaymentAsync(string tenant, decimal amount, CancellationToken ct)
+    {
+        using var activity = ApiTelemetry.Source.StartActivity("Charge payment", ActivityKind.Client);
+        activity?.SetTag("peer.service", "payment-gateway");
+        activity?.SetTag("payment.amount", (double)amount);
+
+        var state = chaos.Snapshot();
+        var affected = chaos.AppliesTo(tenant);
+
+        // fabrikam is our "big" tenant: slightly slower payments, so per-tenant panels look different even without chaos.
+        var latency = Random.Shared.Next(20, tenant == "fabrikam" ? 180 : 90) + (affected ? state.ExtraLatencyMs : 0);
+        await Task.Delay(latency, ct);
+
+        if (affected && Random.Shared.NextDouble() < state.FailureRate)
+        {
+            throw new PaymentDeclinedException("Payment gateway timeout (injected by chaos settings)");
+        }
+    }
+}
