@@ -36,8 +36,10 @@ Aspire dashboard                     Grafana Alloy ── redact · batch ──
 | Resource | What it is |
 |---|---|
 | `webfrontend` | Blazor Server app (global `InteractiveServer` render mode, no WebAssembly): shop, live insights, traffic & chaos |
-| `alloy` | `grafana/alloy` — OTLP receiver → PII redaction → batch → exporters ([grafana/alloy](grafana/alloy)) |
-| `grafana` | `grafana/otel-lgtm` — Grafana + Prometheus + Loki + Tempo, data kept in volume `nobeard-o11y-lgtm-data` |
+| `alloy` | `grafana/alloy` (container `nobeard-demo-alloy`) — OTLP receiver → PII redaction → batch → exporters ([grafana/alloy](grafana/alloy)) |
+| `grafana` | `grafana/otel-lgtm` (container `nobeard-demo-grafana`) — Grafana + Prometheus + Loki + Tempo, data kept in volume `nobeard-demo-lgtm-data` |
+
+All Docker containers and volumes use the `nobeard-demo-` prefix so they don't collide with other local Docker resources.
 
 ## Switch on Grafana Cloud
 
@@ -118,4 +120,6 @@ Remove the `grafana-cloud-otlp-endpoint` secret to go back to local-only (e.g. w
 * **Port 3000 in use** → change `port: 3000` in `AppHost.cs`.
 * **No data in Grafana** → check the `alloy` console logs in the Aspire dashboard; then Prometheus URL of `grafana`
   → `/api/v1/label/__name__/values`.
-* **Reset local data** → stop the AppHost, `docker volume rm nobeard-o11y-lgtm-data`.
+* **Reset local data** → stop the AppHost, `docker volume rm nobeard-demo-lgtm-data`.
+* **Leftover containers after a crash / hard stop** → harmless: Aspire replaces `nobeard-demo-*` containers on the
+  next start. To clean up manually: `docker rm -f nobeard-demo-grafana nobeard-demo-alloy`.
