@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/grafana/">
+    <File Path="grafana/alloy/cloud.alloy" />
+    <File Path="grafana/alloy/local.alloy" />
+    <File Path="grafana/dashboards/nobeard-o11y-demo.json" />
+    <File Path="grafana/provisioning/demo-dashboards.yaml" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="NoBeard.Labs.Observability.ApiService/NoBeard.Labs.Observability.ApiService.csproj" />
+  <Project Path="NoBeard.Labs.Observability.AppHost/NoBeard.Labs.Observability.AppHost.csproj" />
+  <Project Path="NoBeard.Labs.Observability.ServiceDefaults/NoBeard.Labs.Observability.ServiceDefaults.csproj" />
+  <Project Path="NoBeard.Labs.Observability.Web/NoBeard.Labs.Observability.Web.csproj" />
+</Solution>

@@ -27,7 +27,7 @@ webfrontend (Blazor Server) ──HTTP + traceparent + baggage──▶ apiservi
 
 ## Run it (local only — works offline)
 
-1. Open `NoBeard.Labs.Observability.sln`, set **NoBeard.Labs.Observability.AppHost** as the startup project, **F5**.
+1. Open `NoBeard.Labs.Observability.slnx`, set **NoBeard.Labs.Observability.AppHost** as the startup project, **F5**.
 2. The Aspire dashboard opens. Wait until `grafana` (≈20 s on first start) and `alloy` are *Running*.
 3. Click the `webfrontend` URL → the shop. The traffic generator starts placing orders after ~5 s.
 4. `grafana` resource → **Grafana** URL (http://localhost:3000) → Dashboards → *NoBeard Labs* → **.NET O11y Demo**.
