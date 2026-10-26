@@ -98,8 +98,8 @@ trace links on the Shop page.
 2. Grafana Cloud → *Explore*: Prometheus `demo_orders_placed_total` · Loki `{service_name="webfrontend"}` ·
    Tempo → Search → service `webfrontend`. Data arrives within ~30 s.
 3. *Dashboards → New → Import* → upload [`grafana/dashboards/nobeard-o11y-demo.json`](grafana/dashboards/nobeard-o11y-demo.json).
-   At the top pick the `grafanacloud-<stack>-prom` / `-logs` / `-traces` data sources and **save** the dashboard so
-   they stick.
+   The *Metrics / Logs / Traces* pickers auto-select `grafanacloud-<stack>-prom` / `-logs` / `-traces` (they're
+   filtered by name, so the stack's usage / ML / alert-history data sources never get picked by accident).
 4. *Observability → Application* (Application Observability): enable it once; `webfrontend` shows up after a few
    minutes (traces + `host_info` from Alloy).
 

@@ -25,7 +25,8 @@
         "type": "datasource",
         "query": "prometheus",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/^(Prometheus|grafanacloud-.+-prom)$/"
       },
       {
         "name": "loki",
@@ -33,7 +34,8 @@
         "type": "datasource",
         "query": "loki",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/^(Loki|grafanacloud-.+-logs)$/"
       },
       {
         "name": "tempo",
@@ -41,7 +43,8 @@
         "type": "datasource",
         "query": "tempo",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/^(Tempo|grafanacloud-.+-traces)$/"
       },
       {
         "name": "tenant",
