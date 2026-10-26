@@ -1,12 +1,13 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using NoBeard.Labs.Observability.ServiceDefaults;
 
-namespace NoBeard.Labs.Observability.ApiService;
+namespace NoBeard.Labs.Observability.Web.Services;
 
 public record Product(string Id, string Name, decimal Price);
-public record OrderRequest(string ProductId, int Quantity);
 public record OrderConfirmation(string OrderId, string ProductName, int Quantity, decimal Total);
-public record OrderOutcome(OrderConfirmation? Order, string? Error);
+public record OrderResult(bool Success, OrderConfirmation? Order, string? Error, string TraceId, string Tenant, DateTimeOffset At);
+public record ChaosState(double FailureRate, int ExtraLatencyMs, string? Tenant);
 
 public static class Catalog
 {
@@ -22,9 +23,9 @@ public static class Catalog
     public static Product? Find(string id) => Products.FirstOrDefault(p => p.Id == id);
 }
 
-public static class ApiTelemetry
+public static class ShopTelemetry
 {
-    public static readonly ActivitySource Source = new("NoBeard.Labs.Observability.Api");
+    public static readonly ActivitySource Source = new("NoBeard.Labs.Observability.Shop");
 }
 
 /// <summary>
@@ -69,8 +70,6 @@ public sealed class OrderMetrics
     }
 }
 
-public record ChaosState(double FailureRate, int ExtraLatencyMs, string? Tenant);
-
 /// <summary>Runtime-switchable fault injection, optionally scoped to a single tenant (noisy-neighbour demo).</summary>
 public sealed class ChaosSettings
 {
@@ -84,51 +83,61 @@ public sealed class ChaosSettings
 
 public sealed class PaymentDeclinedException(string message) : Exception(message);
 
-public sealed class OrderProcessor(OrderMetrics metrics, ChaosSettings chaos, ILogger<OrderProcessor> logger)
+/// <summary>
+/// Places orders in-process. Each order is one span tree:
+///   (Blazor "Event onclick", .NET 10) -> Place order -> Reserve inventory
+///                                                    -> Charge payment
+/// The tenant is set as attribute + baggage on "Place order", so child spans and every log line written
+/// during the order are tagged with tenant.id automatically (see TenantTelemetry in ServiceDefaults).
+/// </summary>
+public sealed class OrderService(OrderMetrics metrics, ChaosSettings chaos, ILogger<OrderService> logger)
 {
-    public async Task<OrderOutcome> PlaceOrderAsync(string tenant, OrderRequest request, CancellationToken ct)
+    public async Task<OrderResult> PlaceOrderAsync(string tenant, string productId, int quantity, string origin, CancellationToken ct = default)
     {
         var started = Stopwatch.GetTimestamp();
-        using var activity = ApiTelemetry.Source.StartActivity("Process order");
-        activity?.SetTag("order.product_id", request.ProductId);
-        activity?.SetTag("order.quantity", request.Quantity);
+        using var activity = ShopTelemetry.Source.StartActivity("Place order");
+        activity.SetTenant(tenant);
+        activity?.SetTag("order.origin", origin);
+        activity?.SetTag("order.product_id", productId);
+        activity?.SetTag("order.quantity", quantity);
 
-        var product = Catalog.Find(request.ProductId);
+        var traceId = activity?.TraceId.ToString() ?? "";
+        var product = Catalog.Find(productId);
         if (product is null)
         {
-            logger.LogWarning("Tenant {TenantId} ordered unknown product {ProductId}", tenant, request.ProductId);
+            logger.LogWarning("Tenant {TenantId} ordered unknown product {ProductId}", tenant, productId);
             activity?.SetStatus(ActivityStatusCode.Error, "unknown product");
-            return new(null, "unknown_product");
+            return new(false, null, "unknown product", traceId, tenant, DateTimeOffset.Now);
         }
 
         try
         {
-            await ReserveInventoryAsync(product, request.Quantity, ct);
-            await ChargePaymentAsync(tenant, product.Price * request.Quantity, ct);
+            await ReserveInventoryAsync(product, quantity, ct);
+            await ChargePaymentAsync(tenant, product.Price * quantity, ct);
 
             var order = new OrderConfirmation($"ORD-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
-                product.Name, request.Quantity, product.Price * request.Quantity);
+                product.Name, quantity, product.Price * quantity);
 
             activity?.SetTag("order.id", order.OrderId);
-            metrics.Placed(tenant, product, request.Quantity, Stopwatch.GetElapsedTime(started));
+            metrics.Placed(tenant, product, quantity, Stopwatch.GetElapsedTime(started));
             logger.LogInformation("Order {OrderId} placed for tenant {TenantId}: {Quantity} x {ProductName} = {OrderTotal} EUR",
-                order.OrderId, tenant, request.Quantity, product.Name, order.Total);
+                order.OrderId, tenant, quantity, product.Name, order.Total);
 
-            return new(order, null);
+            return new(true, order, null, traceId, tenant, DateTimeOffset.Now);
         }
         catch (PaymentDeclinedException ex)
         {
             activity?.AddException(ex);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             metrics.Failed(tenant, "payment_declined", Stopwatch.GetElapsedTime(started));
-            logger.LogError(ex, "Payment failed for tenant {TenantId} ({ProductName} x {Quantity})", tenant, product.Name, request.Quantity);
-            return new(null, "payment_declined");
+            logger.LogError(ex, "Payment failed for tenant {TenantId} ({ProductName} x {Quantity})", tenant, product.Name, quantity);
+            return new(false, null, "payment declined", traceId, tenant, DateTimeOffset.Now);
         }
     }
 
     private static async Task ReserveInventoryAsync(Product product, int quantity, CancellationToken ct)
     {
-        using var activity = ApiTelemetry.Source.StartActivity("Reserve inventory");
+        using var activity = ShopTelemetry.Source.StartActivity("Reserve inventory");
         activity?.SetTag("product.id", product.Id);
         await Task.Delay(Random.Shared.Next(5, 40), ct);
         activity?.AddEvent(new ActivityEvent("inventory.reserved", tags: new() { ["quantity"] = quantity }));
@@ -136,7 +145,7 @@ public sealed class OrderProcessor(OrderMetrics metrics, ChaosSettings chaos, IL
 
     private async Task ChargePaymentAsync(string tenant, decimal amount, CancellationToken ct)
     {
-        using var activity = ApiTelemetry.Source.StartActivity("Charge payment", ActivityKind.Client);
+        using var activity = ShopTelemetry.Source.StartActivity("Charge payment", ActivityKind.Client);
         activity?.SetTag("peer.service", "payment-gateway");
         activity?.SetTag("payment.amount", (double)amount);
 

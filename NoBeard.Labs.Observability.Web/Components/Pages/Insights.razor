@@ -38,7 +38,7 @@
     @if (_operatorView)
     {
         <StatTile Label="Active Blazor circuits" Value="_circuits" Format="0" Hint=".NET 10 circuit metrics" />
-        <StatTile Label="API 5xx" Value="_api5xx" Unit=" %" Alert="@(_api5xx > 5)" Hint="incl. resilience retries" />
+        <StatTile Label="Blazor event p95" Value="_eventP95" Unit=" ms" Format="0" Hint=".NET 10 component metrics" />
     }
 </div>
 
@@ -97,7 +97,7 @@
     private string? _error;
     private DateTime? _lastUpdate;
 
-    private double? _ordersPerMin, _revenue, _failedPct, _p95, _circuits, _api5xx;
+    private double? _ordersPerMin, _revenue, _failedPct, _p95, _circuits, _eventP95;
     private IReadOnlyList<LineChart.ChartSeries> _ordersSeries = [], _failureSeries = [];
     private IReadOnlyList<TenantRow> _tenantRows = [];
 
@@ -144,7 +144,7 @@
             var failed = Scalar(q.FailedPercent, ct);
             var p95 = Scalar(q.P95ProcessingMs, ct);
             var circuits = _operatorView ? Scalar(InsightQueries.ActiveCircuits, ct) : Task.FromResult<double?>(null);
-            var api5xx = _operatorView ? Scalar(InsightQueries.Api5xxPercent, ct) : Task.FromResult<double?>(null);
+            var eventP95 = _operatorView ? Scalar(InsightQueries.EventHandlerP95Ms, ct) : Task.FromResult<double?>(null);
             var ordersByTenant = Prometheus.QueryAsync(q.OrdersPerMinuteByTenant, ct);
             var failuresByTenant = Prometheus.QueryAsync(q.FailuresPerMinuteByTenant, ct);
             var revenueByTenant = Prometheus.QueryAsync(q.RevenueByTenant, ct);
@@ -152,11 +152,11 @@
             var ordersRange = Prometheus.QueryRangeAsync(q.OrdersPerMinuteByTenant, range, step, ct);
             var failuresRange = Prometheus.QueryRangeAsync(q.FailuresPerMinuteByTenant, range, step, ct);
 
-            await Task.WhenAll(orders, revenue, failed, p95, circuits, api5xx,
+            await Task.WhenAll(orders, revenue, failed, p95, circuits, eventP95,
                 ordersByTenant, failuresByTenant, revenueByTenant, p95ByTenant, ordersRange, failuresRange);
 
-            (_ordersPerMin, _revenue, _failedPct, _p95, _circuits, _api5xx) =
-                (orders.Result, revenue.Result, failed.Result, p95.Result, circuits.Result, api5xx.Result);
+            (_ordersPerMin, _revenue, _failedPct, _p95, _circuits, _eventP95) =
+                (orders.Result, revenue.Result, failed.Result, p95.Result, circuits.Result, eventP95.Result);
 
             _ordersSeries = ToChart(ordersRange.Result);
             _failureSeries = ToChart(failuresRange.Result);

@@ -5,17 +5,17 @@
 <PageTitle>Overview</PageTitle>
 
 <h1>.NET observability end-to-end</h1>
-<p class="lead">Blazor Server → API → Redis, instrumented with OpenTelemetry via Aspire service defaults,
+<p class="lead">A Blazor Server app instrumented with OpenTelemetry via Aspire service defaults,
     shipped through Grafana Alloy to Grafana (local LGTM and/or Grafana Cloud), and read back via the Prometheus API.</p>
 
 <pre class="arch">
- ┌──────────────────┐   HTTP + W3C traceparent/baggage   ┌──────────────┐     ┌───────┐
- │ webfrontend      │ ─────────────────────────────────▶ │ apiservice   │ ──▶ │ Redis │
- │ (Blazor Server)  │                                    │ (minimal API)│     └───────┘
- └───────┬──────────┘                                    └──────┬───────┘
-         │ OTLP (logs · metrics · traces)                       │
-         ├────────────────────────┬─────────────────────────────┤
-         ▼                        ▼
+ ┌──────────────────────────┐
+ │ webfrontend              │   spans · metrics · logs (tenant.id on everything)
+ │ (Blazor Server, .NET 10) │
+ └────────────┬─────────────┘
+              │ OTLP
+              ├────────────────────────┐
+              ▼                        ▼
  ┌────────────────┐      ┌──────────────────┐   batch · redact PII   ┌───────────────────────────┐
  │ Aspire         │      │ Grafana Alloy    │ ─────────────────────▶ │ Local LGTM (Grafana,       │
  │ dashboard      │      │ (OTLP collector) │                        │ Prometheus, Loki, Tempo)   │
@@ -29,7 +29,7 @@
     <div class="col-md-4">
         <div class="card h-100"><div class="card-body">
             <h5 class="card-title">1 · Shop</h5>
-            <p>Place orders as a tenant. Each order is one distributed trace across Blazor, the API and Redis.</p>
+            <p>Place orders as a tenant. Each click is one trace: Blazor event → place order → inventory → payment.</p>
             <a class="btn btn-primary" href="shop">Go shopping</a>
         </div></div>
     </div>

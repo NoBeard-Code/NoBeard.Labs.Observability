@@ -3,11 +3,10 @@ namespace NoBeard.Labs.Observability.Web.Services;
 /// <summary>
 /// Background load so the dashboards are never empty on stage. Can be paused / tuned from the Control page.
 /// </summary>
-public sealed class TrafficGenerator(IServiceScopeFactory scopeFactory, ILogger<TrafficGenerator> logger) : BackgroundService
+public sealed class TrafficGenerator(OrderService orders, ILogger<TrafficGenerator> logger) : BackgroundService
 {
     // Weighted so the per-tenant panels look different: contoso is busy, northwind is small.
     private static readonly (string Tenant, double Weight)[] TenantMix = [("contoso", 0.5), ("fabrikam", 0.35), ("northwind", 0.15)];
-    private static readonly string[] ProductIds = ["otel-hoodie", "aspire-mug", "grafana-socks", "blazor-sticker", "prom-tshirt"];
 
     public bool Enabled { get; set; } = true;
     public double OrdersPerSecond { get; set; } = 2;
@@ -36,9 +35,7 @@ public sealed class TrafficGenerator(IServiceScopeFactory scopeFactory, ILogger<
     {
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var api = scope.ServiceProvider.GetRequiredService<ShopApiClient>();
-            await api.PlaceOrderAsync(PickTenant(), ProductIds[Random.Shared.Next(ProductIds.Length)],
+            await orders.PlaceOrderAsync(PickTenant(), Catalog.Products[Random.Shared.Next(Catalog.Products.Length)].Id,
                 Random.Shared.Next(1, 4), origin: "traffic-generator", ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

@@ -2,21 +2,21 @@
 
 **.NET Observability End‑to‑End: OpenTelemetry with Aspire and Grafana Cloud** — conference demo.
 
-A Blazor **Server** shop + minimal API + Redis, instrumented with OpenTelemetry through Aspire service defaults.
+A single Blazor **Server** shop, instrumented with OpenTelemetry through Aspire service defaults.
 Telemetry goes to the Aspire dashboard (dev loop) **and** through Grafana Alloy to Grafana (local LGTM container,
 optionally Grafana Cloud). The Blazor app then reads the data back through the **Prometheus HTTP API** and renders
 live, tenant-aware insights in the UI.
 
 ```
-webfrontend (Blazor Server) ──HTTP + traceparent + baggage──▶ apiservice ──▶ Redis
-        │                                                        │
-        └──────────── OTLP: logs · metrics · traces ─────────────┤
-                 │                                 │
-                 ▼                                 ▼
-         Aspire dashboard                    Grafana Alloy ── redact · batch ──┬──▶ otel-lgtm (Grafana, Prometheus, Loki, Tempo)
-                                                                               └──▶ Grafana Cloud (optional)
-                                                                                         │
-             Blazor "Live insights" page  ◀──────── Prometheus HTTP API ─────────────────┘
+webfrontend (Blazor Server, .NET 10) — spans · metrics · logs, tenant.id on everything
+        │
+        │ OTLP
+        ├──────────────────────────────────┐
+        ▼                                  ▼
+Aspire dashboard                     Grafana Alloy ── redact · batch ──┬──▶ otel-lgtm (Grafana, Prometheus, Loki, Tempo)
+                                                                       └──▶ Grafana Cloud (optional)
+                                                                                 │
+     Blazor "Live insights" page  ◀──────── Prometheus HTTP API ─────────────────┘
 ```
 
 ## Prerequisites
@@ -35,9 +35,7 @@ webfrontend (Blazor Server) ──HTTP + traceparent + baggage──▶ apiservi
 
 | Resource | What it is |
 |---|---|
-| `webfrontend` | Blazor Server app (global `InteractiveServer` render mode, no WebAssembly) |
-| `apiservice` | Minimal API: catalog (Redis-cached), orders, chaos switch |
-| `cache` | Redis |
+| `webfrontend` | Blazor Server app (global `InteractiveServer` render mode, no WebAssembly): shop, live insights, traffic & chaos |
 | `alloy` | `grafana/alloy` — OTLP receiver → PII redaction → batch → exporters ([grafana/alloy](grafana/alloy)) |
 | `grafana` | `grafana/otel-lgtm` — Grafana + Prometheus + Loki + Tempo, data kept in volume `nobeard-o11y-lgtm-data` |
 
@@ -75,8 +73,8 @@ Remove the `grafana-cloud-otlp-endpoint` secret to go back to local-only (e.g. w
 |---|---|
 | Dual OTLP export (Aspire dashboard + Alloy), Blazor .NET 10 meters/sources, exemplars, 10 s interval for DPM cost | [ServiceDefaults/Extensions.cs](NoBeard.Labs.Observability.ServiceDefaults/Extensions.cs) |
 | Multi-tenant telemetry: baggage → span attribute + log attribute processors | [ServiceDefaults/TenantTelemetry.cs](NoBeard.Labs.Observability.ServiceDefaults/TenantTelemetry.cs) |
-| Custom spans, metrics (`demo.orders.*`), structured logs, chaos | [ApiService/Orders.cs](NoBeard.Labs.Observability.ApiService/Orders.cs) |
-| Orchestration: LGTM, Alloy, Redis, local vs cloud switch | [AppHost/AppHost.cs](NoBeard.Labs.Observability.AppHost/AppHost.cs) |
+| Custom spans, metrics (`demo.orders.*`), structured logs, chaos | [Web/Services/OrderService.cs](NoBeard.Labs.Observability.Web/Services/OrderService.cs) |
+| Orchestration: LGTM, Alloy, local vs cloud switch | [AppHost/AppHost.cs](NoBeard.Labs.Observability.AppHost/AppHost.cs) |
 | Collector pipeline | [grafana/alloy/local.alloy](grafana/alloy/local.alloy), [cloud.alloy](grafana/alloy/cloud.alloy) |
 | Prometheus HTTP API client (`/api/v1/query`, `/query_range`) | [Web/Services/PrometheusClient.cs](NoBeard.Labs.Observability.Web/Services/PrometheusClient.cs) |
 | Server-side PromQL with enforced tenant matcher | [Web/Services/InsightQueries.cs](NoBeard.Labs.Observability.Web/Services/InsightQueries.cs) |
@@ -90,28 +88,22 @@ Remove the `grafana-cloud-otlp-endpoint` secret to go back to local-only (e.g. w
 | `demo.orders.failed` | `demo_orders_failed_total{tenant_id, error_type}` |
 | `demo.orders.revenue` | `demo_orders_revenue_total{tenant_id, product_id}` |
 | `demo.orders.processing.duration` `s` | `demo_orders_processing_duration_seconds_bucket{tenant_id, outcome, le}` |
-| `http.server.request.duration` | `http_server_request_duration_seconds_*{service_name, http_route, …}` |
+| `aspnetcore.components.circuit.active` (.NET 10) | `aspnetcore_components_circuit_active` |
+| `aspnetcore.components.handle_event.duration` (.NET 10) | `aspnetcore_components_handle_event_duration_seconds_bucket` |
 
 ## Demo script (≈10 min)
 
-1. **Aspire dashboard** — resources, structured logs, a trace: Blazor `Place order` → HTTP → API `Process order`
-   → `Reserve inventory` / `Charge payment`; Redis spans on `/products`. Point out `tenant.id` on every span (baggage).
-2. **Alloy UI** — the pipeline graph; `cloud.alloy` fan-out; PII redaction lives in the collector, not in each app.
+1. **Aspire dashboard** — resources, structured logs, a trace: Blazor `Event onclick` → `Place order`
+   → `Reserve inventory` / `Charge payment`. Point out `tenant.id` on every span and log line (baggage + processors).
+2. **Alloy UI** — the pipeline graph; `cloud.alloy` fan-out; PII redaction lives in the collector, not in the app.
 3. **Grafana** — *.NET O11y Demo* dashboard, tenant variable; Explore → Tempo → TraceQL
    `{ span.tenant.id = "fabrikam" && status = error }`; trace → logs.
 4. **Blazor Live insights** — the same numbers, fetched via the Prometheus API and pushed over SignalR every 5 s.
    Toggle *My tenant* vs *Operator view*: the server injects `tenant_id="…"` into every query; tenants never send PromQL.
 5. **Break it** — *Traffic & chaos*: 40 % failures + 1500 ms for **fabrikam**. Watch the per-tenant row go red in
    the Blazor UI, the stat panels in Grafana; click an **exemplar** on the p95 panel → the slow trace → its error log.
-   Note the resilience-handler retries visible in the trace.
    * *Shop → Burst ×20 as fabrikam*: all 20 orders share **one trace** — its root is the .NET 10 Blazor
      `Event onclick` span. Click the trace id → Grafana Tempo.
-   * Keep pushing (80 % failures, 10 orders/s): the API **circuit breaker opens** and orders show *circuit open* for
-     **every** tenant — a noisy neighbour at the resilience layer, visible in traces and in Loki (`OnCircuitOpened`).
-   * War story found while building this demo: `AddStandardResilienceHandler()` inside `ConfigureHttpClientDefaults`
-     shares **one** pipeline/breaker across all HttpClients — the failing API also cut off the Prometheus queries.
-     Fix: `.SelectPipelineByAuthority()` in [Extensions.cs](NoBeard.Labs.Observability.ServiceDefaults/Extensions.cs)
-     (breaker per destination host). Remove it on stage to reproduce the bug.
 6. **Cloud** — same story in Grafana Cloud (pre-recorded/pre-enabled), Application Observability, cost note: 10 s
    export interval and low-cardinality labels (tenant yes, order id no).
 
@@ -121,7 +113,8 @@ Remove the `grafana-cloud-otlp-endpoint` secret to go back to local-only (e.g. w
   (`ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` is set for it), e.g. `dotnet run --project NoBeard.Labs.Observability.AppHost --launch-profile http`.
 * **Tenant resets to contoso after a page reload** → by design: the tenant lives in a scoped service, i.e. per Blazor
   circuit. Open two browser tabs to act as two tenants side by side.
-
+* **"Blazor event p95" shows –** → it only moves when someone clicks in the UI (the traffic generator doesn't raise
+  Blazor events); click a few *Buy* buttons.
 * **Port 3000 in use** → change `port: 3000` in `AppHost.cs`.
 * **No data in Grafana** → check the `alloy` console logs in the Aspire dashboard; then Prometheus URL of `grafana`
   → `/api/v1/label/__name__/values`.

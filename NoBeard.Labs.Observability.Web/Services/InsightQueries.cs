@@ -44,12 +44,8 @@ public sealed class InsightQueries
     // ---- Platform (not tenant data, operator view only) ------------------------------------------------------
     public const string ActiveCircuits = "sum(aspnetcore_components_circuit_active)";
 
-    public const string ApiRequestsPerSecond =
-        "sum(rate(http_server_request_duration_seconds_count{service_name=\"apiservice\",http_route=\"/orders\"}[1m]))";
-
-    public const string Api5xxPercent =
-        "100 * (sum(rate(http_server_request_duration_seconds_count{service_name=\"apiservice\",http_response_status_code=~\"5..\"}[1m])) or vector(0))" +
-        " / sum(rate(http_server_request_duration_seconds_count{service_name=\"apiservice\"}[1m]))";
+    public const string EventHandlerP95Ms =
+        "1000 * histogram_quantile(0.95, sum by (le) (rate(aspnetcore_components_handle_event_duration_seconds_bucket[2m])))";
 
     // ---- Per-tenant breakdown --------------------------------------------------------------------------------
     public string OrdersPerMinuteByTenant => $"sum by (tenant_id) (rate(demo_orders_placed_total{M()}[1m])) * 60";

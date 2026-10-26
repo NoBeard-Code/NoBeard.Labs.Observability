@@ -44,20 +44,9 @@ var alloy = builder.AddContainer("alloy", "grafana/alloy", "v1.21.2")
 // ---------------------------------------------------------------------------------------------------------------
 // The application
 // ---------------------------------------------------------------------------------------------------------------
-var cache = builder.AddRedis("cache");
-
-var apiService = builder.AddProject<Projects.NoBeard_Labs_Observability_ApiService>("apiservice")
-    .WithHttpHealthCheck("/health")
-    .WithReference(cache)
-    .WaitFor(cache)
-    .WithEnvironment("ALLOY_OTLP_ENDPOINT", alloy.GetEndpoint("otlp-grpc"))
-    .WaitFor(alloy);
-
 var web = builder.AddProject<Projects.NoBeard_Labs_Observability_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
-    .WithReference(apiService)
-    .WaitFor(apiService)
     .WithEnvironment("ALLOY_OTLP_ENDPOINT", alloy.GetEndpoint("otlp-grpc"))
     .WaitFor(alloy);
 

@@ -37,8 +37,8 @@ public static class Extensions
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
             // Turn on resilience by default.
-            // SelectPipelineByAuthority: one pipeline (and circuit breaker) per destination host. Without it, every
-            // HttpClient shares ONE breaker - a failing API would also cut off the Prometheus queries (found in this demo!).
+            // SelectPipelineByAuthority: one pipeline (and circuit breaker) per destination host. Without it, all
+            // HttpClients configured here share ONE breaker, so a single failing dependency would cut off the others.
             http.AddStandardResilienceHandler().SelectPipelineByAuthority();
 
             // Turn on service discovery by default

@@ -5,15 +5,15 @@ using OpenTelemetry.Logs;
 namespace NoBeard.Labs.Observability.ServiceDefaults;
 
 /// <summary>
-/// Multi-tenancy in telemetry: the tenant travels between services as W3C baggage ("baggage: tenant.id=contoso")
-/// and is stamped onto every span and log record, so Grafana can slice traces/logs per tenant.
+/// Multi-tenancy in telemetry: the tenant is set once, as baggage on the root span of an operation, and the
+/// processors below stamp it onto every child span and log record - so Grafana can slice traces/logs per tenant.
+/// (Baggage would also cross service boundaries as the W3C "baggage" header if the app were split into services.)
 /// Metrics get the tenant as an explicit tag at the instrument (see OrderMetrics) to keep cardinality under control.
 /// </summary>
 public static class TenantTelemetry
 {
     public const string BaggageKey = "tenant.id";
     public const string AttributeName = "tenant.id";
-    public const string HeaderName = "X-Tenant-Id";
 
     public static readonly string[] KnownTenants = ["contoso", "fabrikam", "northwind"];
 
@@ -27,7 +27,7 @@ public static class TenantTelemetry
     public static string? CurrentTenant => Activity.Current?.GetBaggageItem(BaggageKey);
 }
 
-/// <summary>Copies the tenant baggage onto each span (incl. auto-instrumented HTTP and Redis spans).</summary>
+/// <summary>Copies the tenant baggage onto each span (incl. auto-instrumented spans).</summary>
 internal sealed class TenantSpanProcessor : BaseProcessor<Activity>
 {
     public override void OnStart(Activity activity)

@@ -1,5 +1,6 @@
 @page "/control"
-@inject ShopApiClient Api
+@inject ChaosSettings Chaos
+@inject ILogger<Control> Logger
 @inject TrafficGenerator Traffic
 
 <PageTitle>Traffic & chaos</PageTitle>
@@ -23,15 +24,7 @@
     <div class="col-lg-7">
         <div class="card border-danger"><div class="card-body">
             <h5 class="card-title text-danger">Chaos (payment gateway)</h5>
-            @if (_error is not null)
-            {
-                <div class="alert alert-warning small">@_error</div>
-            }
-            @if (_chaos is null)
-            {
-                <p><em>Loading…</em></p>
-            }
-            else
+            @if (_chaos is not null)
             {
                 <label class="form-label">Failure rate: <strong>@_failureRate%</strong></label>
                 <input type="range" class="form-range" min="0" max="100" step="5" @bind="_failureRate" @bind:event="oninput" />
@@ -49,8 +42,8 @@
                 </select>
 
                 <div class="d-flex gap-2">
-                    <button class="btn btn-danger" @onclick="ApplyAsync">Apply</button>
-                    <button class="btn btn-outline-secondary" @onclick="ResetAsync">Reset to healthy</button>
+                    <button class="btn btn-danger" @onclick="Apply">Apply</button>
+                    <button class="btn btn-outline-secondary" @onclick="Reset">Reset to healthy</button>
                 </div>
                 <p class="mt-3 mb-0 small">Active: @(_chaos.FailureRate.ToString("P0")) failures, +@_chaos.ExtraLatencyMs ms,
                     tenant <strong>@(_chaos.Tenant ?? "all")</strong></p>
@@ -70,28 +63,18 @@
     private int _latency;
     private string _tenant = "";
 
-    private string? _error;
+    protected override void OnInitialized() => Show(Chaos.Snapshot());
 
-    protected override Task OnInitializedAsync() => CallAsync(() => Api.GetChaosAsync());
+    private void Apply() => SetChaos(new(_failureRate / 100.0, _latency, string.IsNullOrEmpty(_tenant) ? null : _tenant));
 
-    private Task ApplyAsync() =>
-        CallAsync(() => Api.SetChaosAsync(new(_failureRate / 100.0, _latency, string.IsNullOrEmpty(_tenant) ? null : _tenant)));
+    private void Reset() => SetChaos(new(0.02, 0, null));
 
-    private Task ResetAsync() => CallAsync(() => Api.SetChaosAsync(new(0.02, 0, null)));
-
-    // The chaos endpoint goes through the same resilience pipeline - while the circuit breaker is open
-    // (≈5 s after a failure storm) calls are rejected, so tell the presenter to retry instead of crashing.
-    private async Task CallAsync(Func<Task<ChaosState>> call)
+    private void SetChaos(ChaosState state)
     {
-        try
-        {
-            Show(await call());
-            _error = null;
-        }
-        catch (Exception ex)
-        {
-            _error = $"API call rejected ({ex.GetType().Name}) — circuit breaker probably open, retry in a few seconds.";
-        }
+        Chaos.Apply(state);
+        Logger.LogWarning("Chaos settings changed: failure rate {FailureRate:P0}, extra latency {ExtraLatencyMs} ms, tenant {ChaosTenant}",
+            state.FailureRate, state.ExtraLatencyMs, state.Tenant ?? "all");
+        Show(Chaos.Snapshot());
     }
 
     private void Show(ChaosState state)

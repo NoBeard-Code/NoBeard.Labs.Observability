@@ -382,7 +382,7 @@
     {
       "id": 9,
       "type": "row",
-      "title": "Platform (RED per service)",
+      "title": "Platform (Blazor Server, .NET 10 metrics)",
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -394,7 +394,7 @@
     {
       "id": 10,
       "type": "timeseries",
-      "title": "HTTP requests / s by service & status",
+      "title": "Blazor event handling p95",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -408,13 +408,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (service_name, http_response_status_code) (rate(http_server_request_duration_seconds_count{http_route!~\"/health|/alive\"}[$__rate_interval]))",
-          "legendFormat": "{{service_name}} {{http_response_status_code}}"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aspnetcore_components_handle_event_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "event handlers",
+          "exemplar": true
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps"
+          "unit": "s"
         },
         "overrides": []
       }
@@ -422,7 +423,7 @@
     {
       "id": 11,
       "type": "timeseries",
-      "title": "HTTP p95 latency by service",
+      "title": "Blazor render diff p95",
       "gridPos": {
         "h": 8,
         "w": 8,
@@ -436,9 +437,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_seconds_bucket{http_route!~\"/health|/alive\"}[$__rate_interval])))",
-          "legendFormat": "{{service_name}}",
-          "exemplar": true
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aspnetcore_components_render_diff_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "render diff"
         }
       ],
       "fieldConfig": {
@@ -465,7 +465,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum({__name__=~\"aspnetcore_components_circuit_active.*\"})",
+          "expr": "sum(aspnetcore_components_circuit_active)",
           "legendFormat": "active circuits"
         }
       ],

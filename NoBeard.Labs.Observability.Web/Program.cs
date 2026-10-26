@@ -12,12 +12,10 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddScoped<TenantState>();
 
-builder.Services.AddHttpClient<ShopApiClient>(client =>
-    {
-        // This URL uses "https+http://" to indicate HTTPS is preferred over HTTP.
-        // Learn more about service discovery scheme resolution at https://aka.ms/dotnet/sdschemes.
-        client.BaseAddress = new("https+http://apiservice");
-    });
+// The shop itself: in-process order handling with custom spans, metrics and logs.
+builder.Services.AddSingleton<OrderMetrics>();
+builder.Services.AddSingleton<ChaosSettings>();
+builder.Services.AddSingleton<OrderService>();
 
 // Prometheus-compatible query API: local LGTM Prometheus or Grafana Cloud Metrics (Mimir), set by the AppHost.
 builder.Services.Configure<PrometheusOptions>(builder.Configuration.GetSection("Prometheus"));
