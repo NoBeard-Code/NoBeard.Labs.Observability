@@ -15,7 +15,7 @@ builder.Services.AddSingleton<OrderMetrics>();
 builder.Services.AddSingleton<ChaosSettings>();
 builder.Services.AddSingleton<OrderService>();
 
-// Prometheus-compatible query API (local LGTM Prometheus), base URL set by the AppHost.
+// Prometheus-compatible query API: local LGTM Prometheus or Grafana Cloud Metrics (Mimir), set by the AppHost.
 builder.Services.Configure<PrometheusOptions>(builder.Configuration.GetSection("Prometheus"));
 builder.Services.AddHttpClient<PrometheusClient>(PrometheusClient.Configure);
 
