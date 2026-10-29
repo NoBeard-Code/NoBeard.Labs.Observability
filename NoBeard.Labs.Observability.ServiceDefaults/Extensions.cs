@@ -72,7 +72,9 @@ public static class Extensions
                     .AddMeter("Microsoft.AspNetCore.Components")
                     .AddMeter("Microsoft.AspNetCore.Components.Lifecycle")
                     .AddMeter("Microsoft.AspNetCore.Components.Server.Circuits")
-                    .AddMeter(DemoTelemetryPrefix);
+                    .AddMeter(DemoTelemetryPrefix)
+                    // Attach trace ids to histogram samples -> jump from a Grafana metric panel straight to the trace.
+                    .SetExemplarFilter(ExemplarFilterType.TraceBased);
 
                 exporters.AddTo(metrics);
             })

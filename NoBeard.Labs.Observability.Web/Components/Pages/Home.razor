@@ -25,14 +25,21 @@
 <div class="row g-3 mt-2">
     <div class="col-md-6">
         <div class="card h-100"><div class="card-body">
-            <h5 class="card-title">Shop</h5>
+            <h5 class="card-title">1 · Shop</h5>
             <p>Place orders. Each click is one trace: Blazor event → place order → inventory → payment.</p>
             <a class="btn btn-primary" href="shop">Go shopping</a>
+        </div></div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">2 · Break things</h5>
+            <p>Inject failures or latency and watch it light up in Grafana.</p>
+            <a class="btn btn-outline-danger" href="control">Traffic &amp; chaos</a>
         </div></div>
     </div>
 </div>
 
 @if (!string.IsNullOrEmpty(Grafana.Value.Url))
 {
-    <p class="mt-4">Grafana: <a href="@Grafana.Value.Url" target="_blank">@Grafana.Value.Url</a> — Explore traces in Tempo, logs in Loki, metrics in Prometheus.</p>
+    <p class="mt-4">Grafana: <a href="@Grafana.Value.Url" target="_blank">@Grafana.Value.Url</a> — dashboard <em>“.NET O11y Demo”</em>.</p>
 }

@@ -6,6 +6,7 @@ namespace NoBeard.Labs.Observability.Web.Services;
 public record Product(string Id, string Name, decimal Price);
 public record OrderConfirmation(string OrderId, string ProductName, int Quantity, decimal Total);
 public record OrderResult(bool Success, OrderConfirmation? Order, string? Error, string TraceId, DateTimeOffset At);
+public record ChaosState(double FailureRate, int ExtraLatencyMs);
 
 public static class Catalog
 {
@@ -67,6 +68,15 @@ public sealed class OrderMetrics
     }
 }
 
+/// <summary>Runtime-switchable fault injection for the payment gateway.</summary>
+public sealed class ChaosSettings
+{
+    private volatile ChaosState _state = new(0.02, 0);
+
+    public ChaosState Snapshot() => _state;
+    public void Apply(ChaosState state) => _state = state with { FailureRate = Math.Clamp(state.FailureRate, 0, 1) };
+}
+
 public sealed class PaymentDeclinedException(string message) : Exception(message);
 
 /// <summary>
@@ -74,7 +84,7 @@ public sealed class PaymentDeclinedException(string message) : Exception(message
 ///   (Blazor "Event onclick", .NET 10) -> Place order -> Reserve inventory
 ///                                                    -> Charge payment
 /// </summary>
-public sealed class OrderService(OrderMetrics metrics, ILogger<OrderService> logger)
+public sealed class OrderService(OrderMetrics metrics, ChaosSettings chaos, ILogger<OrderService> logger)
 {
     public async Task<OrderResult> PlaceOrderAsync(string productId, int quantity, string origin, CancellationToken ct = default)
     {
@@ -126,18 +136,18 @@ public sealed class OrderService(OrderMetrics metrics, ILogger<OrderService> log
         activity?.AddEvent(new ActivityEvent("inventory.reserved", tags: new() { ["quantity"] = quantity }));
     }
 
-    private static async Task ChargePaymentAsync(decimal amount, CancellationToken ct)
+    private async Task ChargePaymentAsync(decimal amount, CancellationToken ct)
     {
         using var activity = ShopTelemetry.Source.StartActivity("Charge payment", ActivityKind.Client);
         activity?.SetTag("peer.service", "payment-gateway");
         activity?.SetTag("payment.amount", (double)amount);
 
-        await Task.Delay(Random.Shared.Next(20, 90), ct);
+        var state = chaos.Snapshot();
+        await Task.Delay(Random.Shared.Next(20, 90) + state.ExtraLatencyMs, ct);
 
-        // The payment gateway is a bit flaky: ~2% of payments fail, so there are always some errors to find.
-        if (Random.Shared.NextDouble() < 0.02)
+        if (Random.Shared.NextDouble() < state.FailureRate)
         {
-            throw new PaymentDeclinedException("Payment gateway timeout");
+            throw new PaymentDeclinedException("Payment gateway timeout (injected by chaos settings)");
         }
     }
 }

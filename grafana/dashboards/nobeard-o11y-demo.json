@@ -1,0 +1,522 @@
+{
+  "uid": "nobeard-o11y-demo",
+  "title": ".NET O11y Demo",
+  "description": "NoBeard Labs - Blazor Server + Aspire + OpenTelemetry. Works on local otel-lgtm and on Grafana Cloud (pick data sources at the top).",
+  "tags": [
+    "dotnet",
+    "aspire",
+    "opentelemetry",
+    "blazor"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": true,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "prom",
+        "label": "Metrics",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "loki",
+        "label": "Logs",
+        "type": "datasource",
+        "query": "loki",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "name": "tempo",
+        "label": "Traces",
+        "type": "datasource",
+        "query": "tempo",
+        "current": {},
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Business",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Orders / min",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(demo_orders_placed_total[$__rate_interval])) * 60"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Revenue (selected range)",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(demo_orders_revenue_total[$__range]))",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Failed orders %",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (sum(rate(demo_orders_failed_total[$__rate_interval])) or vector(0)) / (sum(rate(demo_orders_placed_total[$__rate_interval])) + (sum(rate(demo_orders_failed_total[$__rate_interval])) or vector(0)))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 15
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "background",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "p95 order processing",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_processing_duration_seconds_bucket[$__rate_interval])))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Orders / min by product",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (product_id) (rate(demo_orders_placed_total[$__rate_interval])) * 60",
+          "legendFormat": "{{product_id}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Failed orders / min by error type",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (error_type) (rate(demo_orders_failed_total[$__rate_interval])) * 60",
+          "legendFormat": "{{error_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "drawStyle": "bars"
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "p95 order processing (click an exemplar → trace)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(demo_orders_processing_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p95",
+          "exemplar": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "Platform (Blazor Server, .NET 10 metrics)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Blazor event handling p95",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aspnetcore_components_handle_event_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "event handlers",
+          "exemplar": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Blazor render diff p95",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(aspnetcore_components_render_diff_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "render diff"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Blazor Server: active circuits (.NET 10)",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(aspnetcore_components_circuit_active)",
+          "legendFormat": "active circuits"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "Logs & traces",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      }
+    },
+    {
+      "id": 14,
+      "type": "logs",
+      "title": "Warnings & errors",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_namespace=\"observability-demo\"} | detected_level=~\"warn|error\""
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Failed traces (TraceQL)",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "{ resource.service.namespace = \"observability-demo\" && status = error }",
+          "limit": 20,
+          "tableType": "traces"
+        }
+      ]
+    }
+  ]
+}

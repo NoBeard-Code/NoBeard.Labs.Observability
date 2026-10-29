@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/grafana/">
     <File Path="grafana/alloy/local.alloy" />
+    <File Path="grafana/dashboards/nobeard-o11y-demo.json" />
+    <File Path="grafana/provisioning/demo-dashboards.yaml" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".gitattributes" />

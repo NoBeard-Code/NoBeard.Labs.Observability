@@ -12,6 +12,7 @@ builder.Services.AddRazorComponents()
 
 // The shop itself: in-process order handling with custom spans, metrics and logs.
 builder.Services.AddSingleton<OrderMetrics>();
+builder.Services.AddSingleton<ChaosSettings>();
 builder.Services.AddSingleton<OrderService>();
 
 builder.Services.Configure<GrafanaOptions>(builder.Configuration.GetSection("Grafana"));

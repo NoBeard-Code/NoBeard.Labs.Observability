@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: "NoBeard Labs demo"
+    type: file
+    folder: "NoBeard Labs"
+    options:
+      path: /otel-lgtm/demo-dashboards
+      foldersFromFilesStructure: false

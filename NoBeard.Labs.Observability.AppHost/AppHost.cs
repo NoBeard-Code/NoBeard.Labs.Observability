@@ -9,6 +9,10 @@ var lgtm = builder.AddContainer("grafana", "grafana/otel-lgtm", "0.38.0")
     .WithHttpEndpoint(port: 3000, targetPort: 3000, name: "http")
     .WithHttpEndpoint(targetPort: 9090, name: "prometheus")
     .WithEndpoint(targetPort: 4318, name: "otlp-http", scheme: "http")
+    // Provision the demo dashboard next to the built-in ones.
+    .WithBindMount("../grafana/dashboards", "/otel-lgtm/demo-dashboards", isReadOnly: true)
+    .WithBindMount("../grafana/provisioning/demo-dashboards.yaml",
+        "/otel-lgtm/grafana/conf/provisioning/dashboards/demo-dashboards.yaml", isReadOnly: true)
     // Keep metrics/logs/traces between runs (rehearsal data survives a restart).
     .WithVolume("nobeard-demo-lgtm-data", "/data")
     .WithHttpHealthCheck("/api/health", endpointName: "http")

@@ -1,7 +1,7 @@
 namespace NoBeard.Labs.Observability.Web.Services;
 
 /// <summary>
-/// Background load so there is always telemetry to look at.
+/// Background load so the dashboards are never empty on stage. Can be paused / tuned from the Control page.
 /// </summary>
 public sealed class TrafficGenerator(OrderService orders, ILogger<TrafficGenerator> logger) : BackgroundService
 {
@@ -22,7 +22,7 @@ public sealed class TrafficGenerator(OrderService orders, ILogger<TrafficGenerat
                 continue;
             }
 
-            // Fire-and-forget so slow orders don't throttle the generator.
+            // Fire-and-forget so slow (chaos) orders don't throttle the generator.
             _ = PlaceRandomOrderAsync(stoppingToken);
             await Task.Delay(TimeSpan.FromSeconds(1 / OrdersPerSecond), stoppingToken);
         }
