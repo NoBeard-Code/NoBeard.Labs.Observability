@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -43,20 +46,23 @@ public static class Extensions
 
     public static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
-        builder.Logging.AddOpenTelemetry(logging =>
-        {
-            logging.IncludeFormattedMessage = true;
-            logging.IncludeScopes = true;
-        });
+        var exporters = new OtlpTargets(builder.Configuration);
 
         builder.Services.AddOpenTelemetry()
             // Aspire already sets service.name and service.instance.id via OTEL_* env vars.
-            // service.namespace groups our services (and later becomes the "job" label prefix in Prometheus).
+            // service.namespace ends up as the "job" label prefix in Prometheus: observability-demo/<service>.
             .ConfigureResource(resource => resource.AddAttributes(
             [
                 new("service.namespace", "observability-demo"),
                 new("deployment.environment.name", builder.Environment.EnvironmentName.ToLowerInvariant()),
             ]))
+            .WithLogging(
+                logging => exporters.AddTo(logging),
+                options =>
+                {
+                    options.IncludeFormattedMessage = true;
+                    options.IncludeScopes = true;
+                })
             .WithMetrics(metrics =>
             {
                 metrics.AddAspNetCoreInstrumentation()
@@ -67,6 +73,8 @@ public static class Extensions
                     .AddMeter("Microsoft.AspNetCore.Components.Lifecycle")
                     .AddMeter("Microsoft.AspNetCore.Components.Server.Circuits")
                     .AddMeter(DemoTelemetryPrefix);
+
+                exporters.AddTo(metrics);
             })
             .WithTracing(tracing =>
             {
@@ -82,24 +90,49 @@ public static class Extensions
                             && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath)
                     )
                     .AddHttpClientInstrumentation();
-            });
 
-        builder.AddOpenTelemetryExporters();
+                exporters.AddTo(tracing);
+            });
 
         return builder;
     }
 
-    private static TBuilder AddOpenTelemetryExporters<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    /// <summary>
+    /// Fan-out of OTLP exporters. Each signal is exported to:
+    ///  * the Aspire dashboard (OTEL_EXPORTER_OTLP_* env vars injected by the AppHost) - developer inner loop
+    ///  * a local Grafana (GRAFANA_OTLP_ENDPOINT) - the otel-lgtm container: Prometheus, Loki and Tempo
+    /// Signal-specific named exporters are used because UseOtlpExporter() supports only a single destination.
+    /// </summary>
+    private sealed class OtlpTargets(IConfiguration configuration)
     {
-        // The AppHost injects OTEL_EXPORTER_OTLP_ENDPOINT -> everything goes to the Aspire dashboard.
-        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        private readonly bool _aspireDashboard = !string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        private readonly string? _grafanaEndpoint = configuration["GRAFANA_OTLP_ENDPOINT"];
 
-        if (useOtlpExporter)
+        public void AddTo(LoggerProviderBuilder logging)
         {
-            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+            if (_aspireDashboard) logging.AddOtlpExporter("aspire", _ => { });
+            if (_grafanaEndpoint is not null) logging.AddOtlpExporter("grafana", ConfigureGrafana);
         }
 
-        return builder;
+        public void AddTo(MeterProviderBuilder metrics)
+        {
+            if (_aspireDashboard) metrics.AddOtlpExporter("aspire", _ => { });
+            if (_grafanaEndpoint is not null) metrics.AddOtlpExporter("grafana", ConfigureGrafana);
+        }
+
+        public void AddTo(TracerProviderBuilder tracing)
+        {
+            if (_aspireDashboard) tracing.AddOtlpExporter("aspire", _ => { });
+            if (_grafanaEndpoint is not null) tracing.AddOtlpExporter("grafana", ConfigureGrafana);
+        }
+
+        private void ConfigureGrafana(OtlpExporterOptions options)
+        {
+            options.Endpoint = new Uri(_grafanaEndpoint!);
+            options.Protocol = OtlpExportProtocol.Grpc;
+            // Don't forward the Aspire dashboard API key (read from OTEL_EXPORTER_OTLP_HEADERS) to Grafana.
+            options.Headers = null;
+        }
     }
 
     public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder

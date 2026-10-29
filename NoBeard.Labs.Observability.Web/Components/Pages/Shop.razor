@@ -1,5 +1,6 @@
 @page "/shop"
 @inject OrderService Orders
+@inject IOptions<GrafanaOptions> Grafana
 
 <PageTitle>Shop</PageTitle>
 
@@ -42,7 +43,16 @@
                     }
                 </td>
                 <td>@(r.Order is { } o ? $"{o.OrderId} · {o.Quantity} × {o.ProductName} = {o.Total:0.00} €" : "—")</td>
-                <td><code>@r.TraceId</code></td>
+                <td>
+                    @if (Grafana.Value.TraceUrl(r.TraceId) is { } url)
+                    {
+                        <a href="@url" target="_blank"><code>@r.TraceId[..12]…</code></a>
+                    }
+                    else
+                    {
+                        <code>@r.TraceId</code>
+                    }
+                </td>
             </tr>
         }
     </tbody>

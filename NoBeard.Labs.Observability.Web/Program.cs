@@ -14,6 +14,8 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<OrderMetrics>();
 builder.Services.AddSingleton<OrderService>();
 
+builder.Services.Configure<GrafanaOptions>(builder.Configuration.GetSection("Grafana"));
+
 builder.Services.AddSingleton<TrafficGenerator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TrafficGenerator>());
 

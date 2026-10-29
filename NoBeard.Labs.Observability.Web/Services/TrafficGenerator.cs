@@ -10,7 +10,7 @@ public sealed class TrafficGenerator(OrderService orders, ILogger<TrafficGenerat
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Give the app a moment after startup.
+        // Give Alloy/LGTM a moment after startup.
         await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
         logger.LogInformation("Traffic generator started at {OrdersPerSecond} orders/s", OrdersPerSecond);
 

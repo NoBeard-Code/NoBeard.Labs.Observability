@@ -1,29 +1,24 @@
-# NoBeard.Labs.Observability - step 02: Own spans, metrics and logs + .NET 10 Blazor telemetry
+# NoBeard.Labs.Observability - step 03: Send the same telemetry to a local Grafana (otel-lgtm)
 
 Companion code for the session **.NET Observability End-to-End: OpenTelemetry with Aspire and Grafana Cloud**.
 
 ## What's new in this step
 
-* Own **spans** via `ActivitySource` (`NoBeard.Labs.Observability.Shop`): `Place order` → `Reserve inventory` / `Charge payment`, with attributes, events, error status and the exception.
-* Own **metrics** via `IMeterFactory`: `demo.orders.placed`, `.failed`, `.revenue` and the `demo.orders.processing.duration` histogram.
-* **Structured logs** with message templates (`Order {OrderId} placed ...`) - automatically correlated with the trace.
-* **.NET 10 Blazor telemetry**: `Microsoft.AspNetCore.Components*` sources and meters, and global `InteractiveServer` - a click becomes the **root span** (`Event onclick`).
-* A background **traffic generator** (2 orders/s), so there is always data. *Burst ×20* button in the shop.
-* One wildcard (`NoBeard.Labs.Observability.*`) registers all demo sources/meters; `service.namespace` resource attribute.
+* **grafana/otel-lgtm** container in the AppHost (Grafana + Prometheus + Loki + Tempo), container `nobeard-demo-grafana`, data in volume `nobeard-demo-lgtm-data`, Grafana pinned to http://localhost:3000.
+* A second destination: `UseOtlpExporter()` (one target) is replaced by **named OTLP exporters per signal** - `aspire` (dashboard) and `grafana` (`GRAFANA_OTLP_ENDPOINT`).
+* Trace ids in the shop link straight into **Grafana Explore → Tempo**; *Open Grafana* link in the header.
 
 ## Try it
 
-1. Shop → *Buy* → Aspire dashboard → **Traces** → the `Event onclick` trace: one click, one tree of spans.
-2. *Burst ×20* → one trace with 20 `Place order` children. Find a failed one (red) and look at its exception.
-3. **Metrics** → `NoBeard.Labs.Observability.Orders`; `Microsoft.AspNetCore.Components.Server.Circuits` → active circuits.
-4. **Structured logs** → filter `OrderId` - each log line links to its trace.
+1. Wait until `grafana` is *Running* (first start ≈20 s) → *Open Grafana*.
+2. Explore → **Tempo** → Search → service `webfrontend`; Explore → **Loki** `{service_name="webfrontend"}`; Explore → **Prometheus** `demo_orders_placed_total`.
+3. Shop → buy → click the trace id → the same trace, now in Tempo. OTLP is vendor-neutral: same app code, a second backend.
 
 ## Look at
 
-* `NoBeard.Labs.Observability.Web/Services/OrderService.cs`
-* `NoBeard.Labs.Observability.ServiceDefaults/Extensions.cs`
-* `NoBeard.Labs.Observability.Web/Services/TrafficGenerator.cs`
-* `NoBeard.Labs.Observability.Web/Components/App.razor`
+* `NoBeard.Labs.Observability.AppHost/AppHost.cs`
+* `NoBeard.Labs.Observability.ServiceDefaults/Extensions.cs` (`OtlpTargets`)
+* `NoBeard.Labs.Observability.Web/Services/GrafanaOptions.cs`
 
 ## Run it
 
@@ -38,8 +33,8 @@ Each step is one branch building on the previous one. See exactly what a step ad
 | Step | Branch | What it adds |
 |---|---|---|
 | 01 | [`01-init`](../../tree/01-init) | Aspire + a plain Blazor Server shop |
-| 02 | [`02-custom-telemetry`](../../tree/02-custom-telemetry) | Own spans, metrics and logs + .NET 10 Blazor telemetry **← you are here** |
-| 03 | [`03-local-grafana`](../../tree/03-local-grafana) | Send the same telemetry to a local Grafana (otel-lgtm) |
+| 02 | [`02-custom-telemetry`](../../tree/02-custom-telemetry) | Own spans, metrics and logs + .NET 10 Blazor telemetry |
+| 03 | [`03-local-grafana`](../../tree/03-local-grafana) | Send the same telemetry to a local Grafana (otel-lgtm) **← you are here** |
 | 04 | [`04-alloy`](../../tree/04-alloy) | Put Grafana Alloy (collector) in the middle |
 | 05 | [`05-dashboards-chaos`](../../tree/05-dashboards-chaos) | Provisioned dashboard, exemplars and chaos |
 | 06 | [`06-prometheus-api`](../../tree/06-prometheus-api) | Read metrics back via the Prometheus HTTP API in Blazor |

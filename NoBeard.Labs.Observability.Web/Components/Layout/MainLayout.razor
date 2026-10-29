@@ -1,4 +1,5 @@
 ﻿@inherits LayoutComponentBase
+@inject IOptions<GrafanaOptions> Grafana
 
 <div class="page">
     <div class="sidebar">
@@ -7,6 +8,10 @@
 
     <main>
         <div class="top-row px-4">
+            @if (!string.IsNullOrEmpty(Grafana.Value.Url))
+            {
+                <a href="@Grafana.Value.Url" target="_blank">Open Grafana ↗</a>
+            }
         </div>
 
         <article class="content px-4">
