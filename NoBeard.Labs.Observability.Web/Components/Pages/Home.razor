@@ -10,7 +10,7 @@
 
 <pre class="arch">
  ┌──────────────────────────┐
- │ webfrontend              │   spans · metrics · logs
+ │ webfrontend              │   spans · metrics · logs (tenant.id on everything)
  │ (Blazor Server, .NET 10) │
  └────────────┬─────────────┘
               │ OTLP
@@ -29,7 +29,7 @@
     <div class="col-md-4">
         <div class="card h-100"><div class="card-body">
             <h5 class="card-title">1 · Shop</h5>
-            <p>Place orders. Each click is one trace: Blazor event → place order → inventory → payment.</p>
+            <p>Place orders as a tenant. Each click is one trace: Blazor event → place order → inventory → payment.</p>
             <a class="btn btn-primary" href="shop">Go shopping</a>
         </div></div>
     </div>
@@ -43,7 +43,7 @@
     <div class="col-md-4">
         <div class="card h-100"><div class="card-body">
             <h5 class="card-title">3 · Break things</h5>
-            <p>Inject failures or latency and watch it light up in Grafana and the insights page.</p>
+            <p>Inject failures or latency for one tenant and watch it light up in Grafana and the insights page.</p>
             <a class="btn btn-outline-danger" href="control">Traffic &amp; chaos</a>
         </div></div>
     </div>

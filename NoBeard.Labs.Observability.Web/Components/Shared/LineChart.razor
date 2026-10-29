@@ -20,7 +20,7 @@
             }
             @foreach (var s in Series)
             {
-                <polyline points="@Points(s)" fill="none" stroke="@SeriesColors.For(s.Name)" stroke-width="2"
+                <polyline points="@Points(s)" fill="none" stroke="@TenantColors.For(s.Name)" stroke-width="2"
                           stroke-linejoin="round" vector-effect="non-scaling-stroke" />
             }
         </svg>
@@ -29,7 +29,7 @@
             <span class="legend">
                 @foreach (var s in Series)
                 {
-                    <span><span class="dot" style="background:@SeriesColors.For(s.Name)"></span>@s.Name</span>
+                    <span><span class="dot" style="background:@TenantColors.For(s.Name)"></span>@s.Name</span>
                 }
             </span>
             <span class="axis">@_maxX?.ToLocalTime().ToString("HH:mm") @Unit</span>

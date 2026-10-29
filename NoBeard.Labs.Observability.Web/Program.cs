@@ -10,6 +10,8 @@ builder.AddServiceDefaults();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+builder.Services.AddScoped<TenantState>();
+
 // The shop itself: in-process order handling with custom spans, metrics and logs.
 builder.Services.AddSingleton<OrderMetrics>();
 builder.Services.AddSingleton<ChaosSettings>();

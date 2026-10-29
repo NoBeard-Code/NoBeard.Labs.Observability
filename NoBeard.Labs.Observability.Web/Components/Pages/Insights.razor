@@ -1,6 +1,7 @@
 @page "/insights"
 @implements IAsyncDisposable
 @inject PrometheusClient Prometheus
+@inject TenantState Tenant
 @inject ILogger<Insights> Logger
 
 <PageTitle>Live insights</PageTitle>
@@ -8,6 +9,14 @@
 <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
     <h1 class="mb-0">Live insights</h1>
     <span class="badge text-bg-dark">@Prometheus.SourceName</span>
+    <div class="btn-group btn-group-sm ms-auto" role="group">
+        <button class="btn @(_operatorView ? "btn-outline-primary" : "btn-primary")" @onclick="() => SetView(false)">
+            My tenant (@Tenant.Current)
+        </button>
+        <button class="btn @(_operatorView ? "btn-primary" : "btn-outline-primary")" @onclick="() => SetView(true)">
+            Operator view (all tenants)
+        </button>
+    </div>
 </div>
 
 @if (!Prometheus.IsConfigured)
@@ -26,31 +35,54 @@
     <StatTile Label="Revenue (15 min)" Value="_revenue" Unit=" €" Format="#,0" />
     <StatTile Label="Failed orders" Value="_failedPct" Unit=" %" Alert="@(_failedPct > 10)" />
     <StatTile Label="p95 processing" Value="_p95" Unit=" ms" Format="0" Alert="@(_p95 > 1000)" />
-    <StatTile Label="Active Blazor circuits" Value="_circuits" Format="0" Hint=".NET 10 circuit metrics" />
-    <StatTile Label="Blazor event p95" Value="_eventP95" Unit=" ms" Format="0" Hint=".NET 10 component metrics" />
+    @if (_operatorView)
+    {
+        <StatTile Label="Active Blazor circuits" Value="_circuits" Format="0" Hint=".NET 10 circuit metrics" />
+        <StatTile Label="Blazor event p95" Value="_eventP95" Unit=" ms" Format="0" Hint=".NET 10 component metrics" />
+    }
 </div>
 
 <div class="row g-3 mt-1">
-    <div class="col-xl-6"><LineChart Title="Orders / min by product (last 15 min)" Series="_ordersSeries" /></div>
-    <div class="col-xl-6"><LineChart Title="Failed orders / min (last 15 min)" Series="_failureSeries" /></div>
+    <div class="col-xl-6"><LineChart Title="Orders / min by tenant (last 15 min)" Series="_ordersSeries" /></div>
+    <div class="col-xl-6"><LineChart Title="Failed orders / min by tenant (last 15 min)" Series="_failureSeries" /></div>
 </div>
 
-<details class="mt-4">
-    <summary>PromQL console</summary>
-    <div class="d-flex gap-2 mt-2">
-        <input class="form-control font-monospace" @bind="_adhocQuery" @bind:event="oninput" @onkeydown="OnAdhocKey" />
-        <button class="btn btn-secondary" @onclick="RunAdhocAsync">Run</button>
-    </div>
-    @if (_adhocResult is not null)
-    {
-        <table class="table table-sm mt-2 font-monospace small">
-            @foreach (var s in _adhocResult)
-            {
-                <tr><td>@string.Join(", ", s.Labels.Select(l => $"{l.Key}=\"{l.Value}\""))</td><td class="text-end">@s.Value.ToString("0.###")</td></tr>
-            }
-        </table>
-    }
-</details>
+<h4 class="mt-4">Per tenant</h4>
+<table class="table table-sm align-middle">
+    <thead><tr><th>Tenant</th><th class="text-end">Orders / min</th><th class="text-end">Failures / min</th><th class="text-end">Revenue 15 min</th><th class="text-end">p95 ms</th></tr></thead>
+    <tbody>
+        @foreach (var row in _tenantRows)
+        {
+            <tr class="@(row.FailuresPerMin > 0.2 * Math.Max(row.OrdersPerMin, 1) ? "table-danger" : "")">
+                <td><span class="dot" style="background:@TenantColors.For(row.Tenant)"></span> @row.Tenant</td>
+                <td class="text-end">@row.OrdersPerMin.ToString("0.0")</td>
+                <td class="text-end">@row.FailuresPerMin.ToString("0.0")</td>
+                <td class="text-end">@row.Revenue.ToString("#,0") €</td>
+                <td class="text-end">@(double.IsFinite(row.P95) ? row.P95.ToString("0") : "–")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (_operatorView)
+{
+    <details class="mt-4">
+        <summary>PromQL console (operator only)</summary>
+        <div class="d-flex gap-2 mt-2">
+            <input class="form-control font-monospace" @bind="_adhocQuery" @bind:event="oninput" @onkeydown="OnAdhocKey" />
+            <button class="btn btn-secondary" @onclick="RunAdhocAsync">Run</button>
+        </div>
+        @if (_adhocResult is not null)
+        {
+            <table class="table table-sm mt-2 font-monospace small">
+                @foreach (var s in _adhocResult)
+                {
+                    <tr><td>@string.Join(", ", s.Labels.Select(l => $"{l.Key}=\"{l.Value}\""))</td><td class="text-end">@s.Value.ToString("0.###")</td></tr>
+                }
+            </table>
+        }
+    </details>
+}
 
 <p class="text-muted small mt-3">Refreshed every @RefreshInterval.TotalSeconds s · last update @_lastUpdate?.ToString("HH:mm:ss") ·
     queries go to <code>@Prometheus.BaseUrl</code></p>
@@ -58,17 +90,25 @@
 @code {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
 
+    private record TenantRow(string Tenant, double OrdersPerMin, double FailuresPerMin, double Revenue, double P95);
+
     private readonly CancellationTokenSource _cts = new();
+    private bool _operatorView;
     private string? _error;
     private DateTime? _lastUpdate;
 
     private double? _ordersPerMin, _revenue, _failedPct, _p95, _circuits, _eventP95;
     private IReadOnlyList<LineChart.ChartSeries> _ordersSeries = [], _failureSeries = [];
+    private IReadOnlyList<TenantRow> _tenantRows = [];
 
     private string _adhocQuery = "topk(5, sum by (service_name, http_route) (rate(http_server_request_duration_seconds_count[5m])))";
     private IReadOnlyList<PromSample>? _adhocResult;
 
-    protected override void OnInitialized() => _ = RefreshLoopAsync(_cts.Token);
+    protected override void OnInitialized()
+    {
+        Tenant.Changed += OnTenantChanged;
+        _ = RefreshLoopAsync(_cts.Token);
+    }
 
     private async Task RefreshLoopAsync(CancellationToken ct)
     {
@@ -92,28 +132,39 @@
     {
         if (!Prometheus.IsConfigured) return;
 
+        var q = new InsightQueries(_operatorView ? null : Tenant.Current);
         try
         {
             var range = TimeSpan.FromMinutes(15);
             var step = TimeSpan.FromSeconds(15);
 
             // Fire all queries in parallel - one round trip's worth of latency per refresh.
-            var orders = Scalar(InsightQueries.OrdersPerMinute, ct);
-            var revenue = Scalar(InsightQueries.Revenue15m, ct);
-            var failed = Scalar(InsightQueries.FailedPercent, ct);
-            var p95 = Scalar(InsightQueries.P95ProcessingMs, ct);
-            var circuits = Scalar(InsightQueries.ActiveCircuits, ct);
-            var eventP95 = Scalar(InsightQueries.EventHandlerP95Ms, ct);
-            var ordersRange = Prometheus.QueryRangeAsync(InsightQueries.OrdersPerMinuteByProduct, range, step, ct);
-            var failuresRange = Prometheus.QueryRangeAsync(InsightQueries.FailuresPerMinute, range, step, ct);
+            var orders = Scalar(q.OrdersPerMinute, ct);
+            var revenue = Scalar(q.Revenue15m, ct);
+            var failed = Scalar(q.FailedPercent, ct);
+            var p95 = Scalar(q.P95ProcessingMs, ct);
+            var circuits = _operatorView ? Scalar(InsightQueries.ActiveCircuits, ct) : Task.FromResult<double?>(null);
+            var eventP95 = _operatorView ? Scalar(InsightQueries.EventHandlerP95Ms, ct) : Task.FromResult<double?>(null);
+            var ordersByTenant = Prometheus.QueryAsync(q.OrdersPerMinuteByTenant, ct);
+            var failuresByTenant = Prometheus.QueryAsync(q.FailuresPerMinuteByTenant, ct);
+            var revenueByTenant = Prometheus.QueryAsync(q.RevenueByTenant, ct);
+            var p95ByTenant = Prometheus.QueryAsync(q.P95ByTenant, ct);
+            var ordersRange = Prometheus.QueryRangeAsync(q.OrdersPerMinuteByTenant, range, step, ct);
+            var failuresRange = Prometheus.QueryRangeAsync(q.FailuresPerMinuteByTenant, range, step, ct);
 
-            await Task.WhenAll(orders, revenue, failed, p95, circuits, eventP95, ordersRange, failuresRange);
+            await Task.WhenAll(orders, revenue, failed, p95, circuits, eventP95,
+                ordersByTenant, failuresByTenant, revenueByTenant, p95ByTenant, ordersRange, failuresRange);
 
             (_ordersPerMin, _revenue, _failedPct, _p95, _circuits, _eventP95) =
                 (orders.Result, revenue.Result, failed.Result, p95.Result, circuits.Result, eventP95.Result);
 
-            _ordersSeries = ToChart(ordersRange.Result, "product_id");
-            _failureSeries = ToChart(failuresRange.Result, null);
+            _ordersSeries = ToChart(ordersRange.Result);
+            _failureSeries = ToChart(failuresRange.Result);
+            _tenantRows = [.. (q.Tenant is { } t ? [t] : TenantTelemetry.KnownTenants).Select(tenant => new TenantRow(tenant,
+                ValueFor(ordersByTenant.Result, tenant) ?? 0,
+                ValueFor(failuresByTenant.Result, tenant) ?? 0,
+                ValueFor(revenueByTenant.Result, tenant) ?? 0,
+                ValueFor(p95ByTenant.Result, tenant) ?? double.NaN))];
 
             _error = null;
             _lastUpdate = DateTime.Now;
@@ -134,9 +185,19 @@
     private async Task<double?> Scalar(string promql, CancellationToken ct) =>
         (await Prometheus.QueryAsync(promql, ct)).FirstOrDefault()?.Value;
 
-    // Without a label (single series) the chart line is called "failed".
-    private static IReadOnlyList<LineChart.ChartSeries> ToChart(IReadOnlyList<PromSeries> series, string? label) =>
-        [.. series.Select(s => new LineChart.ChartSeries(label is null ? "failed" : s.Labels.GetValueOrDefault(label, "?"), s.Points)).OrderBy(s => s.Name)];
+    private static double? ValueFor(IReadOnlyList<PromSample> samples, string tenant) =>
+        samples.FirstOrDefault(s => s.Labels.GetValueOrDefault("tenant_id") == tenant)?.Value;
+
+    private static IReadOnlyList<LineChart.ChartSeries> ToChart(IReadOnlyList<PromSeries> series) =>
+        [.. series.Select(s => new LineChart.ChartSeries(s.Labels.GetValueOrDefault("tenant_id", "?"), s.Points)).OrderBy(s => s.Name)];
+
+    private async Task SetView(bool operatorView)
+    {
+        _operatorView = operatorView;
+        await RefreshAsync(_cts.Token);
+    }
+
+    private void OnTenantChanged() => _ = RefreshAsync(_cts.Token);
 
     private async Task OnAdhocKey(KeyboardEventArgs e)
     {
@@ -157,6 +218,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        Tenant.Changed -= OnTenantChanged;
         await _cts.CancelAsync();
         _cts.Dispose();
     }

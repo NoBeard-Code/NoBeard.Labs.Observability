@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
+using NoBeard.Labs.Observability.ServiceDefaults;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
@@ -60,7 +61,12 @@ public static class Extensions
                 new("deployment.environment.name", builder.Environment.EnvironmentName.ToLowerInvariant()),
             ]))
             .WithLogging(
-                logging => exporters.AddTo(logging),
+                logging =>
+                {
+                    // Processors run in registration order: enrich first, export after.
+                    logging.AddProcessor(new TenantLogProcessor());
+                    exporters.AddTo(logging);
+                },
                 options =>
                 {
                     options.IncludeFormattedMessage = true;
@@ -88,6 +94,7 @@ public static class Extensions
                     // .NET 10: Blazor Server circuit, navigation and event-handler spans
                     .AddSource("Microsoft.AspNetCore.Components")
                     .AddSource("Microsoft.AspNetCore.Components.Server.Circuits")
+                    .AddProcessor(new TenantSpanProcessor())
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>

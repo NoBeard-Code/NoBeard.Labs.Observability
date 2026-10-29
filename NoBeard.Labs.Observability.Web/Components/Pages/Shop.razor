@@ -1,10 +1,12 @@
 @page "/shop"
+@implements IDisposable
 @inject OrderService Orders
+@inject TenantState Tenant
 @inject IOptions<GrafanaOptions> Grafana
 
 <PageTitle>Shop</PageTitle>
 
-<h1>Shop</h1>
+<h1>Shop <small class="text-muted fs-5">as <span style="color:@TenantColors.For(Tenant.Current)">@Tenant.Current</span></small></h1>
 
 <div class="row g-3">
     @foreach (var p in Catalog.Products)
@@ -26,12 +28,13 @@
 
 <h4 class="mt-4">Your recent orders</h4>
 <table class="table table-sm align-middle">
-    <thead><tr><th>Time</th><th>Result</th><th>Order</th><th>Trace</th></tr></thead>
+    <thead><tr><th>Time</th><th>Tenant</th><th>Result</th><th>Order</th><th>Trace</th></tr></thead>
     <tbody>
         @foreach (var r in _results)
         {
             <tr>
                 <td>@r.At.ToString("HH:mm:ss")</td>
+                <td><span class="dot" style="background:@TenantColors.For(r.Tenant)"></span> @r.Tenant</td>
                 <td>
                     @if (r.Success)
                     {
@@ -62,9 +65,11 @@
     private readonly List<OrderResult> _results = [];
     private bool _busy;
 
+    protected override void OnInitialized() => Tenant.Changed += OnTenantChanged;
+
     private async Task OrderAsync(Product p, int quantity)
     {
-        var result = await Orders.PlaceOrderAsync(p.Id, quantity, origin: "ui");
+        var result = await Orders.PlaceOrderAsync(Tenant.Current, p.Id, quantity, origin: "ui");
         _results.Insert(0, result);
         if (_results.Count > 25) _results.RemoveAt(_results.Count - 1);
     }
@@ -75,7 +80,7 @@
         try
         {
             var results = await Task.WhenAll(Enumerable.Range(0, 20)
-                .Select(_ => Orders.PlaceOrderAsync(p.Id, Random.Shared.Next(1, 4), origin: "ui-burst")));
+                .Select(_ => Orders.PlaceOrderAsync(Tenant.Current, p.Id, Random.Shared.Next(1, 4), origin: "ui-burst")));
             // All 20 orders share one trace: the .NET 10 Blazor event-handler span of this click is their parent.
             _results.InsertRange(0, results.OrderByDescending(r => r.At));
             if (_results.Count > 25) _results.RemoveRange(25, _results.Count - 25);
@@ -85,4 +90,8 @@
             _busy = false;
         }
     }
+
+    private void OnTenantChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Tenant.Changed -= OnTenantChanged;
 }

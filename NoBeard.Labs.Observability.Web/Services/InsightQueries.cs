@@ -1,30 +1,57 @@
+using NoBeard.Labs.Observability.ServiceDefaults;
+
 namespace NoBeard.Labs.Observability.Web.Services;
 
 /// <summary>
-/// All PromQL used by the Live insights page. Metric names are the Prometheus translation of the OTel instruments
-/// (see OrderMetrics): dots become underscores, counters get _total, the unit "s" becomes _seconds.
+/// All PromQL used by the Live insights page, built server-side.
+///
+/// Multi-tenant rule of thumb: never let a tenant send PromQL. The tenant only picks from a known list,
+/// and the server injects the tenant_id matcher into every query - so a tenant can't read another tenant's data.
+/// (In Grafana Cloud you would back this up with label-based access policies on the read token.)
 /// </summary>
-public static class InsightQueries
+public sealed class InsightQueries
 {
+    private readonly string _tenantMatcher;
+
+    public InsightQueries(string? tenant)
+    {
+        if (tenant is not null && !TenantTelemetry.KnownTenants.Contains(tenant))
+        {
+            throw new ArgumentException($"Unknown tenant '{tenant}'", nameof(tenant));
+        }
+
+        Tenant = tenant;
+        _tenantMatcher = tenant is null ? "" : $"tenant_id=\"{tenant}\"";
+    }
+
+    public string? Tenant { get; }
+
+    private string M(string extra = "") =>
+        "{" + string.Join(",", new[] { _tenantMatcher, extra }.Where(s => s.Length > 0)) + "}";
+
     // ---- KPI tiles -------------------------------------------------------------------------------------------
-    public const string OrdersPerMinute = "sum(rate(demo_orders_placed_total[1m])) * 60";
+    public string OrdersPerMinute => $"sum(rate(demo_orders_placed_total{M()}[1m])) * 60";
 
-    public const string Revenue15m = "sum(increase(demo_orders_revenue_total[15m]))";
+    public string Revenue15m => $"sum(increase(demo_orders_revenue_total{M()}[15m]))";
 
-    public const string FailedPercent =
-        "100 * (sum(rate(demo_orders_failed_total[2m])) or vector(0))" +
-        " / (sum(rate(demo_orders_placed_total[2m])) + (sum(rate(demo_orders_failed_total[2m])) or vector(0)))";
+    public string FailedPercent =>
+        $"100 * (sum(rate(demo_orders_failed_total{M()}[2m])) or vector(0))" +
+        $" / (sum(rate(demo_orders_placed_total{M()}[2m])) + (sum(rate(demo_orders_failed_total{M()}[2m])) or vector(0)))";
 
-    public const string P95ProcessingMs =
-        "1000 * histogram_quantile(0.95, sum by (le) (rate(demo_orders_processing_duration_seconds_bucket[2m])))";
+    public string P95ProcessingMs =>
+        $"1000 * histogram_quantile(0.95, sum by (le) (rate(demo_orders_processing_duration_seconds_bucket{M()}[2m])))";
 
-    // ---- Platform: .NET 10 Blazor Server metrics -------------------------------------------------------------
+    // ---- Platform (not tenant data, operator view only) ------------------------------------------------------
     public const string ActiveCircuits = "sum(aspnetcore_components_circuit_active)";
 
     public const string EventHandlerP95Ms =
         "1000 * histogram_quantile(0.95, sum by (le) (rate(aspnetcore_components_handle_event_duration_seconds_bucket[2m])))";
 
-    // ---- Charts ----------------------------------------------------------------------------------------------
-    public const string OrdersPerMinuteByProduct = "sum by (product_id) (rate(demo_orders_placed_total[1m])) * 60";
-    public const string FailuresPerMinute = "sum(rate(demo_orders_failed_total[1m])) * 60";
+    // ---- Per-tenant breakdown --------------------------------------------------------------------------------
+    public string OrdersPerMinuteByTenant => $"sum by (tenant_id) (rate(demo_orders_placed_total{M()}[1m])) * 60";
+    public string FailuresPerMinuteByTenant => $"sum by (tenant_id) (rate(demo_orders_failed_total{M()}[1m])) * 60";
+    public string RevenueByTenant => $"sum by (tenant_id) (increase(demo_orders_revenue_total{M()}[15m]))";
+
+    public string P95ByTenant =>
+        $"1000 * histogram_quantile(0.95, sum by (tenant_id, le) (rate(demo_orders_processing_duration_seconds_bucket{M()}[2m])))";
 }
