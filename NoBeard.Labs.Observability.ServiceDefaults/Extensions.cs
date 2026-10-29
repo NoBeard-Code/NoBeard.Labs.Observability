@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
@@ -34,8 +35,10 @@ public static class Extensions
 
         builder.Services.ConfigureHttpClientDefaults(http =>
         {
-            // Turn on resilience by default
-            http.AddStandardResilienceHandler();
+            // Turn on resilience by default.
+            // SelectPipelineByAuthority: one pipeline (and circuit breaker) per destination host. Without it, all
+            // HttpClients configured here share ONE breaker, so a single failing dependency would cut off the others.
+            http.AddStandardResilienceHandler().SelectPipelineByAuthority();
 
             // Turn on service discovery by default
             http.AddServiceDiscovery();

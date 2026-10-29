@@ -60,4 +60,19 @@ h1:focus {
 
 .arch { background: #0f172a; color: #e2e8f0; padding: 1rem 1.25rem; border-radius: .5rem; font-size: .78rem; line-height: 1.25; overflow-x: auto; }
 
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .75rem; }
+.stat-tile { border: 1px solid #e3e6ea; border-radius: .5rem; padding: .75rem 1rem; background: #fff; }
+.stat-tile.alert-state { border-color: #dc3545; background: #fff5f5; }
+.stat-label { font-size: .8rem; color: #6b7280; text-transform: uppercase; letter-spacing: .03em; }
+.stat-value { font-size: 1.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-unit { font-size: 1rem; font-weight: 400; color: #6b7280; }
+.stat-hint { font-size: .75rem; color: #9ca3af; }
 
+.chart { border: 1px solid #e3e6ea; border-radius: .5rem; padding: .75rem 1rem; background: #fff; }
+.chart-title { font-weight: 600; margin-bottom: .25rem; }
+.chart svg { width: 100%; height: 180px; display: block; }
+.chart .grid { stroke: #eef0f3; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart .axis, .chart-footer .axis { font-size: 10px; fill: #9ca3af; color: #9ca3af; }
+.chart-empty { height: 180px; display: grid; place-items: center; color: #9ca3af; }
+.chart-footer { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; }
+.chart-footer .legend { display: flex; gap: .9rem; }

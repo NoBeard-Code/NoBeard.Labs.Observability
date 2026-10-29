@@ -1,0 +1,163 @@
+@page "/insights"
+@implements IAsyncDisposable
+@inject PrometheusClient Prometheus
+@inject ILogger<Insights> Logger
+
+<PageTitle>Live insights</PageTitle>
+
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+    <h1 class="mb-0">Live insights</h1>
+    <span class="badge text-bg-dark">@Prometheus.SourceName</span>
+</div>
+
+@if (!Prometheus.IsConfigured)
+{
+    <div class="alert alert-warning">No Prometheus endpoint configured (<code>Prometheus:BaseUrl</code>). Start the solution via the AppHost.</div>
+    return;
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-warning small">@_error</div>
+}
+
+<div class="stat-grid">
+    <StatTile Label="Orders / min" Value="_ordersPerMin" />
+    <StatTile Label="Revenue (15 min)" Value="_revenue" Unit=" €" Format="#,0" />
+    <StatTile Label="Failed orders" Value="_failedPct" Unit=" %" Alert="@(_failedPct > 10)" />
+    <StatTile Label="p95 processing" Value="_p95" Unit=" ms" Format="0" Alert="@(_p95 > 1000)" />
+    <StatTile Label="Active Blazor circuits" Value="_circuits" Format="0" Hint=".NET 10 circuit metrics" />
+    <StatTile Label="Blazor event p95" Value="_eventP95" Unit=" ms" Format="0" Hint=".NET 10 component metrics" />
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-xl-6"><LineChart Title="Orders / min by product (last 15 min)" Series="_ordersSeries" /></div>
+    <div class="col-xl-6"><LineChart Title="Failed orders / min (last 15 min)" Series="_failureSeries" /></div>
+</div>
+
+<details class="mt-4">
+    <summary>PromQL console</summary>
+    <div class="d-flex gap-2 mt-2">
+        <input class="form-control font-monospace" @bind="_adhocQuery" @bind:event="oninput" @onkeydown="OnAdhocKey" />
+        <button class="btn btn-secondary" @onclick="RunAdhocAsync">Run</button>
+    </div>
+    @if (_adhocResult is not null)
+    {
+        <table class="table table-sm mt-2 font-monospace small">
+            @foreach (var s in _adhocResult)
+            {
+                <tr><td>@string.Join(", ", s.Labels.Select(l => $"{l.Key}=\"{l.Value}\""))</td><td class="text-end">@s.Value.ToString("0.###")</td></tr>
+            }
+        </table>
+    }
+</details>
+
+<p class="text-muted small mt-3">Refreshed every @RefreshInterval.TotalSeconds s · last update @_lastUpdate?.ToString("HH:mm:ss") ·
+    queries go to <code>@Prometheus.BaseUrl</code></p>
+
+@code {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
+
+    private readonly CancellationTokenSource _cts = new();
+    private string? _error;
+    private DateTime? _lastUpdate;
+
+    private double? _ordersPerMin, _revenue, _failedPct, _p95, _circuits, _eventP95;
+    private IReadOnlyList<LineChart.ChartSeries> _ordersSeries = [], _failureSeries = [];
+
+    private string _adhocQuery = "topk(5, sum by (service_name, http_route) (rate(http_server_request_duration_seconds_count[5m])))";
+    private IReadOnlyList<PromSample>? _adhocResult;
+
+    protected override void OnInitialized() => _ = RefreshLoopAsync(_cts.Token);
+
+    private async Task RefreshLoopAsync(CancellationToken ct)
+    {
+        // Blazor Server: the timer runs on the server and every refresh is pushed to the browser as a render diff.
+        using var timer = new PeriodicTimer(RefreshInterval);
+        try
+        {
+            do
+            {
+                await RefreshAsync(ct);
+            }
+            while (await timer.WaitForNextTickAsync(ct));
+        }
+        catch (OperationCanceledException)
+        {
+            // page closed
+        }
+    }
+
+    private async Task RefreshAsync(CancellationToken ct)
+    {
+        if (!Prometheus.IsConfigured) return;
+
+        try
+        {
+            var range = TimeSpan.FromMinutes(15);
+            var step = TimeSpan.FromSeconds(15);
+
+            // Fire all queries in parallel - one round trip's worth of latency per refresh.
+            var orders = Scalar(InsightQueries.OrdersPerMinute, ct);
+            var revenue = Scalar(InsightQueries.Revenue15m, ct);
+            var failed = Scalar(InsightQueries.FailedPercent, ct);
+            var p95 = Scalar(InsightQueries.P95ProcessingMs, ct);
+            var circuits = Scalar(InsightQueries.ActiveCircuits, ct);
+            var eventP95 = Scalar(InsightQueries.EventHandlerP95Ms, ct);
+            var ordersRange = Prometheus.QueryRangeAsync(InsightQueries.OrdersPerMinuteByProduct, range, step, ct);
+            var failuresRange = Prometheus.QueryRangeAsync(InsightQueries.FailuresPerMinute, range, step, ct);
+
+            await Task.WhenAll(orders, revenue, failed, p95, circuits, eventP95, ordersRange, failuresRange);
+
+            (_ordersPerMin, _revenue, _failedPct, _p95, _circuits, _eventP95) =
+                (orders.Result, revenue.Result, failed.Result, p95.Result, circuits.Result, eventP95.Result);
+
+            _ordersSeries = ToChart(ordersRange.Result, "product_id");
+            _failureSeries = ToChart(failuresRange.Result, null);
+
+            _error = null;
+            _lastUpdate = DateTime.Now;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Prometheus refresh failed");
+            _error = $"Prometheus query failed: {ex.Message}";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<double?> Scalar(string promql, CancellationToken ct) =>
+        (await Prometheus.QueryAsync(promql, ct)).FirstOrDefault()?.Value;
+
+    // Without a label (single series) the chart line is called "failed".
+    private static IReadOnlyList<LineChart.ChartSeries> ToChart(IReadOnlyList<PromSeries> series, string? label) =>
+        [.. series.Select(s => new LineChart.ChartSeries(label is null ? "failed" : s.Labels.GetValueOrDefault(label, "?"), s.Points)).OrderBy(s => s.Name)];
+
+    private async Task OnAdhocKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await RunAdhocAsync();
+    }
+
+    private async Task RunAdhocAsync()
+    {
+        try
+        {
+            _adhocResult = await Prometheus.QueryAsync(_adhocQuery, _cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync();
+        _cts.Dispose();
+    }
+}

@@ -1,11 +1,12 @@
 ﻿@page "/"
+@inject PrometheusClient Prometheus
 @inject IOptions<GrafanaOptions> Grafana
 
 <PageTitle>Overview</PageTitle>
 
 <h1>.NET observability end-to-end</h1>
 <p class="lead">A Blazor Server app instrumented with OpenTelemetry via Aspire service defaults,
-    shipped through Grafana Alloy to a local Grafana (otel-lgtm).</p>
+    shipped through Grafana Alloy to a local Grafana (otel-lgtm), and read back via the Prometheus API.</p>
 
 <pre class="arch">
  ┌──────────────────────────┐
@@ -18,22 +19,30 @@
  ┌────────────────┐      ┌──────────────────┐   batch · redact PII   ┌───────────────────────────┐
  │ Aspire         │      │ Grafana Alloy    │ ─────────────────────▶ │ Local LGTM (Grafana,       │
  │ dashboard      │      │ (OTLP collector) │                        │ Prometheus, Loki, Tempo)   │
- │ (dev loop)     │      └──────────────────┘                        └───────────────────────────┘
- └────────────────┘
+ │ (dev loop)     │      └──────────────────┘                        └─────────────┬─────────────┘
+ └────────────────┘                                                                │ Prometheus HTTP API
+                        "Live insights" page in this Blazor app  ◀──────────────────┘
 </pre>
 
 <div class="row g-3 mt-2">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card h-100"><div class="card-body">
             <h5 class="card-title">1 · Shop</h5>
             <p>Place orders. Each click is one trace: Blazor event → place order → inventory → payment.</p>
             <a class="btn btn-primary" href="shop">Go shopping</a>
         </div></div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="card h-100"><div class="card-body">
-            <h5 class="card-title">2 · Break things</h5>
-            <p>Inject failures or latency and watch it light up in Grafana.</p>
+            <h5 class="card-title">2 · Live insights</h5>
+            <p>PromQL against <strong>@Prometheus.SourceName</strong>, pushed to the browser over the Blazor circuit.</p>
+            <a class="btn btn-primary" href="insights">Open insights</a>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100"><div class="card-body">
+            <h5 class="card-title">3 · Break things</h5>
+            <p>Inject failures or latency and watch it light up in Grafana and the insights page.</p>
             <a class="btn btn-outline-danger" href="control">Traffic &amp; chaos</a>
         </div></div>
     </div>

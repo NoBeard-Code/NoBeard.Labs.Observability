@@ -45,6 +45,9 @@ builder.AddProject<Projects.NoBeard_Labs_Observability_Web>("webfrontend")
     .WithHttpHealthCheck("/health")
     .WithEnvironment("ALLOY_OTLP_ENDPOINT", alloy.GetEndpoint("otlp-grpc"))
     .WaitFor(alloy)
+    // The Blazor "Live insights" page reads metrics back through the Prometheus HTTP API.
+    .WithEnvironment("Prometheus__SourceName", "Local Prometheus (otel-lgtm)")
+    .WithEnvironment("Prometheus__BaseUrl", lgtm.GetEndpoint("prometheus"))
     .WithEnvironment("Grafana__Url", lgtm.GetEndpoint("http"));
 
 builder.Build().Run();

@@ -1,0 +1,17 @@
+<div class="stat-tile @(Alert ? "alert-state" : "")">
+    <div class="stat-label">@Label</div>
+    <div class="stat-value">@(Value is { } v && double.IsFinite(v) ? v.ToString(Format) : "–")<span class="stat-unit">@Unit</span></div>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <div class="stat-hint">@Hint</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public double? Value { get; set; }
+    [Parameter] public string Unit { get; set; } = "";
+    [Parameter] public string Format { get; set; } = "0.#";
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public bool Alert { get; set; }
+}

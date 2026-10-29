@@ -1,0 +1,76 @@
+@* Dependency-free SVG line chart, rendered on the server and diffed over the Blazor circuit on every refresh. *@
+
+<div class="chart">
+    <div class="chart-title">@Title</div>
+    @if (Series.Count == 0 || _maxY is null)
+    {
+        <div class="chart-empty">No data yet</div>
+    }
+    else
+    {
+        <svg viewBox="0 0 @Width @Height" preserveAspectRatio="none" role="img" aria-label="@Title">
+            @for (var i = 0; i <= 4; i++)
+            {
+                var y = Pad + (Height - 2 * Pad) * i / 4.0;
+                @* SVG <text> must sit inside an element here, otherwise Razor treats it as its own <text> tag *@
+                <g>
+                    <line x1="@Pad" x2="@(Width - 4)" y1="@F(y)" y2="@F(y)" class="grid" />
+                    <text x="2" y="@F(y + 4)" class="axis">@((_maxY.Value * (4 - i) / 4).ToString("0.#"))</text>
+                </g>
+            }
+            @foreach (var s in Series)
+            {
+                <polyline points="@Points(s)" fill="none" stroke="@SeriesColors.For(s.Name)" stroke-width="2"
+                          stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            }
+        </svg>
+        <div class="chart-footer">
+            <span class="axis">@_minX?.ToLocalTime().ToString("HH:mm")</span>
+            <span class="legend">
+                @foreach (var s in Series)
+                {
+                    <span><span class="dot" style="background:@SeriesColors.For(s.Name)"></span>@s.Name</span>
+                }
+            </span>
+            <span class="axis">@_maxX?.ToLocalTime().ToString("HH:mm") @Unit</span>
+        </div>
+    }
+</div>
+
+@code {
+    public record ChartSeries(string Name, IReadOnlyList<PromPoint> Points);
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public IReadOnlyList<ChartSeries> Series { get; set; } = [];
+    [Parameter] public string Unit { get; set; } = "";
+
+    private const double Width = 600, Height = 180, Pad = 14;
+    private DateTimeOffset? _minX, _maxX;
+    private double? _maxY;
+
+    protected override void OnParametersSet()
+    {
+        var points = Series.SelectMany(s => s.Points).Where(p => double.IsFinite(p.Value)).ToList();
+        if (points.Count == 0) { _maxY = null; return; }
+
+        _minX = points.Min(p => p.Time);
+        _maxX = points.Max(p => p.Time);
+        _maxY = Math.Max(NiceCeiling(points.Max(p => p.Value)), 1);
+    }
+
+    private string Points(ChartSeries s)
+    {
+        var span = Math.Max((_maxX!.Value - _minX!.Value).TotalSeconds, 1);
+        return string.Join(" ", s.Points.Where(p => double.IsFinite(p.Value)).Select(p =>
+            $"{F(Pad + 24 + (Width - Pad - 28) * (p.Time - _minX.Value).TotalSeconds / span)},{F(Height - Pad - (Height - 2 * Pad) * p.Value / _maxY!.Value)}"));
+    }
+
+    private static double NiceCeiling(double v)
+    {
+        if (v <= 0) return 1;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(v)));
+        return new[] { 1, 2, 2.5, 5, 10 }.Select(m => m * magnitude).First(c => c >= v);
+    }
+
+    private static string F(double d) => d.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+}
