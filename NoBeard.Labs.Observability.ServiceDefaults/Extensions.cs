@@ -100,37 +100,46 @@ public static class Extensions
     /// <summary>
     /// Fan-out of OTLP exporters. Each signal is exported to:
     ///  * the Aspire dashboard (OTEL_EXPORTER_OTLP_* env vars injected by the AppHost) - developer inner loop
-    ///  * a local Grafana (GRAFANA_OTLP_ENDPOINT) - the otel-lgtm container: Prometheus, Loki and Tempo
+    ///  * Grafana Alloy (ALLOY_OTLP_ENDPOINT) - the collector that ships to local Grafana and Grafana Cloud
     /// Signal-specific named exporters are used because UseOtlpExporter() supports only a single destination.
     /// </summary>
     private sealed class OtlpTargets(IConfiguration configuration)
     {
         private readonly bool _aspireDashboard = !string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-        private readonly string? _grafanaEndpoint = configuration["GRAFANA_OTLP_ENDPOINT"];
+        private readonly string? _alloyEndpoint = configuration["ALLOY_OTLP_ENDPOINT"];
 
         public void AddTo(LoggerProviderBuilder logging)
         {
             if (_aspireDashboard) logging.AddOtlpExporter("aspire", _ => { });
-            if (_grafanaEndpoint is not null) logging.AddOtlpExporter("grafana", ConfigureGrafana);
+            if (_alloyEndpoint is not null) logging.AddOtlpExporter("alloy", ConfigureAlloy);
         }
 
         public void AddTo(MeterProviderBuilder metrics)
         {
             if (_aspireDashboard) metrics.AddOtlpExporter("aspire", _ => { });
-            if (_grafanaEndpoint is not null) metrics.AddOtlpExporter("grafana", ConfigureGrafana);
+            if (_alloyEndpoint is not null)
+            {
+                metrics.AddOtlpExporter("alloy", (exporter, reader) =>
+                {
+                    ConfigureAlloy(exporter);
+                    // Aspire pushes metrics every second for a snappy dashboard. Grafana Cloud bills per
+                    // data point per minute (DPM), so the Alloy/Grafana path uses a 10s interval instead.
+                    reader.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 10_000;
+                });
+            }
         }
 
         public void AddTo(TracerProviderBuilder tracing)
         {
             if (_aspireDashboard) tracing.AddOtlpExporter("aspire", _ => { });
-            if (_grafanaEndpoint is not null) tracing.AddOtlpExporter("grafana", ConfigureGrafana);
+            if (_alloyEndpoint is not null) tracing.AddOtlpExporter("alloy", ConfigureAlloy);
         }
 
-        private void ConfigureGrafana(OtlpExporterOptions options)
+        private void ConfigureAlloy(OtlpExporterOptions options)
         {
-            options.Endpoint = new Uri(_grafanaEndpoint!);
+            options.Endpoint = new Uri(_alloyEndpoint!);
             options.Protocol = OtlpExportProtocol.Grpc;
-            // Don't forward the Aspire dashboard API key (read from OTEL_EXPORTER_OTLP_HEADERS) to Grafana.
+            // Don't forward the Aspire dashboard API key (read from OTEL_EXPORTER_OTLP_HEADERS) to Alloy.
             options.Headers = null;
         }
     }

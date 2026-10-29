@@ -1,24 +1,24 @@
-# NoBeard.Labs.Observability - step 03: Send the same telemetry to a local Grafana (otel-lgtm)
+# NoBeard.Labs.Observability - step 04: Put Grafana Alloy (collector) in the middle
 
 Companion code for the session **.NET Observability End-to-End: OpenTelemetry with Aspire and Grafana Cloud**.
 
 ## What's new in this step
 
-* **grafana/otel-lgtm** container in the AppHost (Grafana + Prometheus + Loki + Tempo), container `nobeard-demo-grafana`, data in volume `nobeard-demo-lgtm-data`, Grafana pinned to http://localhost:3000.
-* A second destination: `UseOtlpExporter()` (one target) is replaced by **named OTLP exporters per signal** - `aspire` (dashboard) and `grafana` (`GRAFANA_OTLP_ENDPOINT`).
-* Trace ids in the shop link straight into **Grafana Explore → Tempo**; *Open Grafana* link in the header.
+* **Grafana Alloy** container (`nobeard-demo-alloy`) between the app and Grafana: OTLP receiver → **PII redaction** → **batch** → exporter ([`grafana/alloy/local.alloy`](grafana/alloy/local.alloy)).
+* The app change is tiny: the `grafana` exporter becomes `alloy` (`ALLOY_OTLP_ENDPOINT`). Everything else moves into collector config.
+* Metrics to Alloy every **10 s** (the Aspire dashboard keeps 1 s) - the setting that matters for cost once a SaaS backend is involved.
 
 ## Try it
 
-1. Wait until `grafana` is *Running* (first start ≈20 s) → *Open Grafana*.
-2. Explore → **Tempo** → Search → service `webfrontend`; Explore → **Loki** `{service_name="webfrontend"}`; Explore → **Prometheus** `demo_orders_placed_total`.
-3. Shop → buy → click the trace id → the same trace, now in Tempo. OTLP is vendor-neutral: same app code, a second backend.
+1. Aspire dashboard → `alloy` → **Alloy pipeline** → *Graph*: live flow rates per signal between the components.
+2. Everything in Grafana still works - now via the collector.
+3. `git diff 03-local-grafana 04-alloy` - see how little the app itself changed.
 
 ## Look at
 
+* `grafana/alloy/local.alloy`
 * `NoBeard.Labs.Observability.AppHost/AppHost.cs`
-* `NoBeard.Labs.Observability.ServiceDefaults/Extensions.cs` (`OtlpTargets`)
-* `NoBeard.Labs.Observability.Web/Services/GrafanaOptions.cs`
+* `NoBeard.Labs.Observability.ServiceDefaults/Extensions.cs`
 
 ## Run it
 
@@ -34,8 +34,8 @@ Each step is one branch building on the previous one. See exactly what a step ad
 |---|---|---|
 | 01 | [`01-init`](../../tree/01-init) | Aspire + a plain Blazor Server shop |
 | 02 | [`02-custom-telemetry`](../../tree/02-custom-telemetry) | Own spans, metrics and logs + .NET 10 Blazor telemetry |
-| 03 | [`03-local-grafana`](../../tree/03-local-grafana) | Send the same telemetry to a local Grafana (otel-lgtm) **← you are here** |
-| 04 | [`04-alloy`](../../tree/04-alloy) | Put Grafana Alloy (collector) in the middle |
+| 03 | [`03-local-grafana`](../../tree/03-local-grafana) | Send the same telemetry to a local Grafana (otel-lgtm) |
+| 04 | [`04-alloy`](../../tree/04-alloy) | Put Grafana Alloy (collector) in the middle **← you are here** |
 | 05 | [`05-dashboards-chaos`](../../tree/05-dashboards-chaos) | Provisioned dashboard, exemplars and chaos |
 | 06 | [`06-prometheus-api`](../../tree/06-prometheus-api) | Read metrics back via the Prometheus HTTP API in Blazor |
 | 07 | [`07-grafana-cloud`](../../tree/07-grafana-cloud) | Fan out to Grafana Cloud with a launch profile |

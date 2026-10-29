@@ -5,20 +5,20 @@
 
 <h1>.NET observability end-to-end</h1>
 <p class="lead">A Blazor Server app instrumented with OpenTelemetry via Aspire service defaults,
-    exporting the same telemetry to the Aspire dashboard and to a local Grafana (otel-lgtm).</p>
+    shipped through Grafana Alloy to a local Grafana (otel-lgtm).</p>
 
 <pre class="arch">
  ┌──────────────────────────┐
  │ webfrontend              │   spans · metrics · logs
  │ (Blazor Server, .NET 10) │
  └────────────┬─────────────┘
-              │ OTLP (two named exporters)
+              │ OTLP
               ├────────────────────────┐
               ▼                        ▼
- ┌────────────────┐      ┌───────────────────────────┐
- │ Aspire         │      │ Local LGTM (Grafana,       │
- │ dashboard      │      │ Prometheus, Loki, Tempo)   │
- │ (dev loop)     │      └───────────────────────────┘
+ ┌────────────────┐      ┌──────────────────┐   batch · redact PII   ┌───────────────────────────┐
+ │ Aspire         │      │ Grafana Alloy    │ ─────────────────────▶ │ Local LGTM (Grafana,       │
+ │ dashboard      │      │ (OTLP collector) │                        │ Prometheus, Loki, Tempo)   │
+ │ (dev loop)     │      └──────────────────┘                        └───────────────────────────┘
  └────────────────┘
 </pre>
 

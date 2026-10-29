@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/grafana/">
+    <File Path="grafana/alloy/local.alloy" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".gitattributes" />
     <File Path=".gitignore" />
