@@ -29,7 +29,7 @@
             <span class="legend">
                 @foreach (var s in Series)
                 {
-                    <span><span class="tenant-dot" style="background:@TenantColors.For(s.Name)"></span>@s.Name</span>
+                    <span><span class="dot" style="background:@TenantColors.For(s.Name)"></span>@s.Name</span>
                 }
             </span>
             <span class="axis">@_maxX?.ToLocalTime().ToString("HH:mm") @Unit</span>

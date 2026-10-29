@@ -54,7 +54,7 @@
         @foreach (var row in _tenantRows)
         {
             <tr class="@(row.FailuresPerMin > 0.2 * Math.Max(row.OrdersPerMin, 1) ? "table-danger" : "")">
-                <td><span class="tenant-dot" style="background:@TenantColors.For(row.Tenant)"></span> @row.Tenant</td>
+                <td><span class="dot" style="background:@TenantColors.For(row.Tenant)"></span> @row.Tenant</td>
                 <td class="text-end">@row.OrdersPerMin.ToString("0.0")</td>
                 <td class="text-end">@row.FailuresPerMin.ToString("0.0")</td>
                 <td class="text-end">@row.Revenue.ToString("#,0") €</td>
