@@ -10,8 +10,12 @@ builder.AddServiceDefaults();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// The shop itself: in-process order handling (no custom telemetry yet).
+// The shop itself: in-process order handling with custom spans, metrics and logs.
+builder.Services.AddSingleton<OrderMetrics>();
 builder.Services.AddSingleton<OrderService>();
+
+builder.Services.AddSingleton<TrafficGenerator>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TrafficGenerator>());
 
 var app = builder.Build();
 

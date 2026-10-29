@@ -1,5 +1,4 @@
 @page "/shop"
-@rendermode InteractiveServer
 @inject OrderService Orders
 
 <PageTitle>Shop</PageTitle>
@@ -14,8 +13,9 @@
                 <div class="card-body d-flex flex-column">
                     <h5 class="card-title">@p.Name</h5>
                     <p class="card-text fs-4">@p.Price.ToString("0.00") €</p>
-                    <div class="mt-auto">
-                        <button class="btn btn-primary" @onclick="() => OrderAsync(p)">Buy</button>
+                    <div class="mt-auto d-flex gap-2">
+                        <button class="btn btn-primary" disabled="@_busy" @onclick="() => OrderAsync(p, 1)">Buy</button>
+                        <button class="btn btn-outline-secondary" disabled="@_busy" @onclick="() => BurstAsync(p)">Burst ×20</button>
                     </div>
                 </div>
             </div>
@@ -25,7 +25,7 @@
 
 <h4 class="mt-4">Your recent orders</h4>
 <table class="table table-sm align-middle">
-    <thead><tr><th>Time</th><th>Result</th><th>Order</th></tr></thead>
+    <thead><tr><th>Time</th><th>Result</th><th>Order</th><th>Trace</th></tr></thead>
     <tbody>
         @foreach (var r in _results)
         {
@@ -42,6 +42,7 @@
                     }
                 </td>
                 <td>@(r.Order is { } o ? $"{o.OrderId} · {o.Quantity} × {o.ProductName} = {o.Total:0.00} €" : "—")</td>
+                <td><code>@r.TraceId</code></td>
             </tr>
         }
     </tbody>
@@ -49,10 +50,29 @@
 
 @code {
     private readonly List<OrderResult> _results = [];
+    private bool _busy;
 
-    private async Task OrderAsync(Product p)
+    private async Task OrderAsync(Product p, int quantity)
     {
-        _results.Insert(0, await Orders.PlaceOrderAsync(p.Id, 1));
+        var result = await Orders.PlaceOrderAsync(p.Id, quantity, origin: "ui");
+        _results.Insert(0, result);
         if (_results.Count > 25) _results.RemoveAt(_results.Count - 1);
+    }
+
+    private async Task BurstAsync(Product p)
+    {
+        _busy = true;
+        try
+        {
+            var results = await Task.WhenAll(Enumerable.Range(0, 20)
+                .Select(_ => Orders.PlaceOrderAsync(p.Id, Random.Shared.Next(1, 4), origin: "ui-burst")));
+            // All 20 orders share one trace: the .NET 10 Blazor event-handler span of this click is their parent.
+            _results.InsertRange(0, results.OrderByDescending(r => r.At));
+            if (_results.Count > 25) _results.RemoveRange(25, _results.Count - 25);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }

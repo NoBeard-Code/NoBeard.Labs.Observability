@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 namespace Microsoft.Extensions.Hosting;
@@ -16,6 +17,9 @@ public static class Extensions
 {
     private const string HealthEndpointPath = "/health";
     private const string AlivenessEndpointPath = "/alive";
+
+    // Every custom ActivitySource / Meter in the demo starts with this prefix, so one wildcard picks them all up.
+    public const string DemoTelemetryPrefix = "NoBeard.Labs.Observability.*";
 
     public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
@@ -46,15 +50,31 @@ public static class Extensions
         });
 
         builder.Services.AddOpenTelemetry()
+            // Aspire already sets service.name and service.instance.id via OTEL_* env vars.
+            // service.namespace groups our services (and later becomes the "job" label prefix in Prometheus).
+            .ConfigureResource(resource => resource.AddAttributes(
+            [
+                new("service.namespace", "observability-demo"),
+                new("deployment.environment.name", builder.Environment.EnvironmentName.ToLowerInvariant()),
+            ]))
             .WithMetrics(metrics =>
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    // .NET 10: Blazor Server circuit + component metrics
+                    .AddMeter("Microsoft.AspNetCore.Components")
+                    .AddMeter("Microsoft.AspNetCore.Components.Lifecycle")
+                    .AddMeter("Microsoft.AspNetCore.Components.Server.Circuits")
+                    .AddMeter(DemoTelemetryPrefix);
             })
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
+                    .AddSource(DemoTelemetryPrefix)
+                    // .NET 10: Blazor Server circuit, navigation and event-handler spans
+                    .AddSource("Microsoft.AspNetCore.Components")
+                    .AddSource("Microsoft.AspNetCore.Components.Server.Circuits")
                     .AddAspNetCoreInstrumentation(tracing =>
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>
