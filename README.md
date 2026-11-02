@@ -7,16 +7,22 @@ Telemetry goes to the Aspire dashboard (dev loop) **and** through Grafana Alloy 
 optionally Grafana Cloud). The Blazor app then reads the data back through the **Prometheus HTTP API** and renders
 live, tenant-aware insights in the UI.
 
-```
-webfrontend (Blazor Server, .NET 10) — spans · metrics · logs, tenant.id on everything
-        │
-        │ OTLP
-        ├──────────────────────────────────┐
-        ▼                                  ▼
-Aspire dashboard                     Grafana Alloy ── redact · batch ──┬──▶ otel-lgtm (Grafana, Prometheus, Loki, Tempo)
-                                                                       └──▶ Grafana Cloud (optional)
-                                                                                 │
-     Blazor "Live insights" page  ◀──────── Prometheus HTTP API ─────────────────┘
+```mermaid
+flowchart LR
+    app["<b>webfrontend</b><br/>Blazor Server, .NET 10<br/>spans · metrics · logs<br/>tenant.id on everything"]
+    dashboard["<b>Aspire dashboard</b><br/>dev loop"]
+    alloy["<b>Grafana Alloy</b><br/>redact · batch"]
+    lgtm["<b>otel-lgtm</b><br/>Grafana, Prometheus,<br/>Loki, Tempo"]
+    cloud["<b>Grafana Cloud</b><br/>optional"]
+    prometheus["<b>Prometheus HTTP API</b>"]
+
+    app -->|OTLP| dashboard
+    app -->|OTLP| alloy
+    alloy --> lgtm
+    alloy -.-> cloud
+    lgtm --> prometheus
+    cloud -.-> prometheus
+    prometheus -->|"Live insights page"| app
 ```
 
 ## Prerequisites
